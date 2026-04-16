@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -19,7 +20,7 @@ var (
 	buildRef       string
 	buildRepo      string
 	buildDockerTag string
-	buildNoWait    bool
+	buildWait      bool
 )
 
 var buildCmd = &cobra.Command{
@@ -36,26 +37,34 @@ eth-client-docker-image-builder repository:
   lighthouse  -> build-push-lighthouse.yml
   nimbus-eth2 -> build-push-nimbus-eth2.yml
 
-By default the command waits for the build to complete. Use --no-wait
-to trigger and return immediately.
+By default the command triggers the build and returns immediately.
+Use --wait to block until the build completes.
 
 Examples:
-  panda build geth                        # build and wait
+  panda build geth                        # trigger and return
   panda build geth --ref master
   panda build lighthouse --ref unstable
-  panda build geth --no-wait              # fire and forget
+  panda build geth --wait                 # block until completion
   panda build geth --repo ethereum/go-ethereum --ref my-branch
   panda build geth --ref my-branch --tag my-custom-tag`,
 	Args: cobra.ExactArgs(1),
 	RunE: runBuild,
 }
 
+var buildStatusCmd = &cobra.Command{
+	Use:   "status <run-id>",
+	Short: "Check the status of a GitHub Actions build run",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runBuildStatus,
+}
+
 func init() {
 	rootCmd.AddCommand(buildCmd)
+	buildCmd.AddCommand(buildStatusCmd)
 	buildCmd.Flags().StringVar(&buildRef, "ref", "", "branch, tag, or SHA to build from (uses workflow default if omitted)")
 	buildCmd.Flags().StringVar(&buildRepo, "repo", "", "source repository override (e.g. user/go-ethereum)")
 	buildCmd.Flags().StringVar(&buildDockerTag, "tag", "", "override target docker tag")
-	buildCmd.Flags().BoolVar(&buildNoWait, "no-wait", false, "trigger the build and return immediately without waiting")
+	buildCmd.Flags().BoolVar(&buildWait, "wait", false, "block until the build completes instead of returning immediately")
 }
 
 func runBuild(_ *cobra.Command, args []string) error {
@@ -72,11 +81,11 @@ func runBuild(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("triggering build: %w", err)
 	}
 
-	if buildNoWait {
+	if !buildWait {
 		return printBuildTriggered(resp)
 	}
 
-	// Default: wait for completion.
+	// --wait: block until completion.
 	if resp.RunID == 0 {
 		// Trigger succeeded but we couldn't find the run ID.
 		// Fall back to non-wait output.
@@ -118,6 +127,29 @@ func runBuild(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+func runBuildStatus(_ *cobra.Command, args []string) error {
+	runID, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
+
+	ctx := context.Background()
+
+	status, err := getBuildStatus(ctx, runID)
+	if err != nil {
+		return fmt.Errorf("checking build status: %w", err)
+	}
+
+	if isJSON() {
+		return printJSON(status)
+	}
+
+	fmt.Printf("run=%d status=%s conclusion=%s url=%s\n",
+		status.RunID, status.Status, status.Conclusion, status.HTMLURL)
+
+	return nil
+}
+
 func printBuildTriggered(resp *serverapi.BuildTriggerResponse) error {
 	if isJSON() {
 		return printJSON(resp)
@@ -142,6 +174,23 @@ func printBuildTriggered(resp *serverapi.BuildTriggerResponse) error {
 
 	if buildDockerTag != "" {
 		fmt.Printf("  tag:       %s\n", buildDockerTag)
+	}
+
+	if resp.RunID > 0 {
+		fmt.Println()
+		fmt.Println("<assistant_hint>")
+		fmt.Println("To monitor this build in the background, use the Monitor tool with the following parameters:")
+		fmt.Printf("  description: \"%s build (run %d)\"\n", resp.Client, resp.RunID)
+		fmt.Println("  timeout_ms: 1800000")
+		fmt.Println("  persistent: false")
+		fmt.Println("  command:")
+		fmt.Println("    while true; do")
+		fmt.Printf("      line=$(panda build status %d 2>&1) || { echo \"status_check_failed\"; sleep 15; continue; }\n", resp.RunID)
+		fmt.Println("      echo \"$line\"")
+		fmt.Println("      echo \"$line\" | grep -q 'status=completed' && exit 0")
+		fmt.Println("      sleep 15")
+		fmt.Println("    done")
+		fmt.Println("</assistant_hint>")
 	}
 
 	return nil
