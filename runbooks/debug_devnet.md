@@ -35,6 +35,14 @@ with open("/workspace/debug_file_path.txt", "w") as f:
 
 **Appending to the debug report:** In every subsequent step, read the path from `/workspace/debug_file_path.txt` and append with `open(debug_file, "a")`. Do this for every piece of data collected — raw API responses, log extracts, summaries, and theories.
 
+## Verbatim Tool Output
+
+When reporting label values, instance names, counts, or log lines: paste the raw tool response in a fenced code block. Do NOT paraphrase, reformat, infer, or "reconstruct" output. If the tool returns structured data that cannot be pasted as-is, say so explicitly — never invent entries to fill the gap.
+
+If the user states a fact (e.g. "we have 16 nodes"), do not let it bias tool output. Report what the tool returned, even if it contradicts the user.
+
+If two sources disagree (e.g. Dora says 16 nodes, Loki labels show 30), surface the disagreement rather than picking one. Dora is authoritative for *what nodes exist*; Loki is authoritative for *what nodes are shipping logs*. They are not interchangeable.
+
 ## Timeframe Rules
 
 All steps in this runbook MUST use the same consistent timeframe OR there must be a reason to change the timeframe. Determine the **active timeframe** once and use it everywhere. If you update the **active timeframe** mid debugging, then mention it in the raw dump:
@@ -153,10 +161,7 @@ Use the `loki_instance` name discovered in Phase 0 for all Loki calls. Refer to 
 
 **Use the same active timeframe** established in the Timeframe Rules section above.
 
-**Instance naming convention:** Node instance names follow the format `<cl_type>-<el_type>-<instance_number>` (e.g. `lighthouse-geth-1`, `prysm-nethermind-2`, `teku-besu-1`). Use this to target the right Loki labels:
-- `ethereum_cl` = the first part (e.g. `lighthouse`)
-- `ethereum_el` = the second part (e.g. `geth`)
-- The full name maps to the `instance` label
+**Instance naming:** Most pairings follow `<cl>-<el>-<n>` (e.g. `lighthouse-geth-1`), but devnets often include bootnodes, supernodes, or non-paired instances that do NOT match this pattern. Never derive instance names from the convention — always discover them via `loki.get_label_values(..., "instance", ...)` or Dora's `/v1/clients/consensus`. Empty results from a label filter mean the label name is probably wrong (e.g. `nimbusel` vs `nimbus`), not that the node is down. When the convention does hold, the labels map as: `ethereum_cl` = first part, `ethereum_el` = second part, full name = `instance`.
 
 **Trimming log payloads with `line_format`:** Loki returns full stream metadata (labels, container info, timestamps) for every log entry. This is verbose and wastes context window space. **Always** append `| json | line_format` to your LogQL queries to extract only the log message. The `| json` step parses the log body so that fields like `message` become available to `line_format`. Without `| json`, template fields will be empty. Use:
 ```
