@@ -43,6 +43,39 @@ If the user states a fact (e.g. "we have 16 nodes"), do not let it bias tool out
 
 If two sources disagree (e.g. Dora says 16 nodes, Loki labels show 30), surface the disagreement rather than picking one. Dora is authoritative for *what nodes exist*; Loki is authoritative for *what nodes are shipping logs*. They are not interchangeable.
 
+## Citations
+
+In this runbook, a *citation* is a `panda` command that re-derives the cited evidence. Every finding you record — both in the debug report and in chat output to the user — MUST be followed by the citation(s) that produce it, so the user can run them and verify the result independently. Citations are claim-anchored, not exhaustive: cite the calls that support a finding, not every probe along the way.
+
+**Format.** Place citations directly under the finding they support, in a fenced shell block. Each command preceded by a one-line `#` comment saying what it fetches and why.
+
+**Peer selection.** When a single client implementation is suspected (e.g. an EL bug), citations MUST target a different client implementation discovered in Phase 0, so the verification call returns canonical data rather than re-confirming the suspect's behavior. Never cite against the suspect node.
+
+**Artifact → citation catalog.** Cite using the `panda ethnode` surface (`panda ethnode --help` for full list). For ClickHouse / Loki findings, cite the exact `panda execute --code '...'` invocation used.
+
+| Artifact | Citation |
+|---|---|
+| Block by hash | `panda ethnode exec-rpc <network> <healthy-instance> eth_getBlockByHash '["<hash>", true]'` |
+| Block by number | `panda ethnode exec-rpc <network> <healthy-instance> eth_getBlockByNumber '["<num-or-tag>", true]'` |
+| Transaction | `panda ethnode exec-rpc <network> <healthy-instance> eth_getTransactionByHash '["<tx-hash>"]'` |
+| Receipt | `panda ethnode exec-rpc <network> <healthy-instance> eth_getTransactionReceipt '["<tx-hash>"]'` |
+| Beacon block at slot | `panda ethnode header <network> <instance> <slot>` and/or `panda ethnode beacon-get <network> <instance> /eth/v2/beacon/blocks/<slot>` |
+| Validator | `panda ethnode beacon-get <network> <instance> /eth/v1/beacon/states/head/validators/<index>` |
+| Node state (offline / stuck / desynced) | `panda ethnode syncing\|finality\|peers\|version\|health <network> <instance>` |
+| ClickHouse / Loki finding | `panda execute --code '...'` with the exact query and timeframe used |
+
+**Example.** A finding such as *"the failing block on `bal-devnet-5` was `0xe44e…`, with a bad transaction at index 2"* should be cited:
+
+```bash
+# Parent block + state root, fetched from a non-suspect EL for offline replay
+panda ethnode exec-rpc bal-devnet-5 lighthouse-geth-1 \
+  eth_getBlockByHash '["0xe44efb33a509cf46e68cd991314da8a1fb09cd8367466d3977e18ce5dc198189", true]'
+
+# The failing block's tx at index 2
+panda ethnode exec-rpc bal-devnet-5 lighthouse-geth-1 \
+  eth_getTransactionByHash '["0x3b1f21a097ebf3ab352c3b1652ca468d23afc8814ba10d0eaf66134f998b7eb7"]'
+```
+
 ## Timeframe Rules
 
 All steps in this runbook MUST use the same consistent timeframe OR there must be a reason to change the timeframe. Determine the **active timeframe** once and use it everywhere. If you update the **active timeframe** mid debugging, then mention it in the raw dump:
@@ -149,7 +182,7 @@ Before collecting data, determine which datasources have the target network.
    - Which specific nodes/validators are offline or underperforming?
    - If there are multiple forks, which nodes are on which fork?
 
-   Append the baseline summary to the debug report as a readable narrative. You SHOULD generate Dora links for relevant epochs, slots, and validators using the `dora.link_*()` helpers (see query skill).
+   Append the baseline summary to the debug report as a readable narrative. You SHOULD generate Dora links for relevant epochs, slots, and validators using the `dora.link_*()` helpers (see query skill). **Cite each named node, validator, slot, or fork-tip block per the Citations section.**
 
    **If Dora shows a healthy network** (no splits, finality on track, high participation, no offline nodes) but the user reports issues, present the healthy baseline to the user and ask them for more details about what they're observing. You MAY proceed to Loki only if you have a specific target — otherwise let the user guide the next step.
 
@@ -229,7 +262,7 @@ If `message` is still empty after `| json`, try `{{.log}}` or `{{.msg}}` instead
    - If a network split occurred, what is the first block where forks diverge? What is special about that block?
    - If you suspect a specific EIP is involved, use `search(type="eips", query="<EIP topic or number>")` to fetch the specification and confirm or rule out a faulty implementation.
 
-   Append theories and reasoning to the debug report.
+   Append theories and reasoning to the debug report. **When a hypothesis pinpoints a specific block, transaction, slot, validator, or instance, cite it per the Citations section so the user can replay the data offline against a non-suspect peer.**
 
 ### RPC Validation (requires `has_ethnode = true`)
 
@@ -241,7 +274,7 @@ If `message` is still empty after `| json`, try `{{.log}}` or `{{.msg}}` instead
 - **Verifying a hypothesis** → query nodes directly via `beacon_get` / `execution_rpc`
 - **Finality stalled** → compare finality checkpoints across all nodes
 
-Append all RPC query results and analysis to the debug report.
+Append all RPC query results and analysis to the debug report. **The `panda ethnode` invocation that produced each RPC result is itself the citation for any finding it supports — record it alongside the result per the Citations section.**
 
 9. **Summarize findings** - You MUST present the user with:
    - A clear description of what is happening (symptoms)
@@ -249,6 +282,7 @@ Append all RPC query results and analysis to the debug report.
    - Which nodes/clients are affected
    - Dora links for relevant slots, epochs, and validators (if Dora was available)
    - Suggested next steps (e.g. restart a node, report a client bug, check infrastructure)
+   - **Citations** for every concrete artifact named above (block, transaction, slot, validator, instance) per the Citations section, so the user can independently verify each claim
 
    Append the summary to the debug report. You MUST provide the user with the file path.
 
