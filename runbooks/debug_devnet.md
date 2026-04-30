@@ -49,8 +49,6 @@ A *citation* is a `panda` command that re-derives the cited evidence. Every find
 
 Place each citation directly under the finding, in a fenced shell block, with a one-line `#` comment saying what it fetches. Discover the current command surface with `panda --help` (and subcommand `--help`) — do not hardcode flags or subcommands from memory.
 
-**Peer selection.** Run citation commands against a known-healthy peer, not the node you suspect is broken — otherwise the verification just re-reads the same bad state.
-
 ## Timeframe Rules
 
 All steps in this runbook MUST use the same consistent timeframe OR there must be a reason to change the timeframe. Determine the **active timeframe** once and use it everywhere. If you update the **active timeframe** mid debugging, then mention it in the raw dump:
@@ -237,7 +235,7 @@ If `message` is still empty after `| json`, try `{{.log}}` or `{{.msg}}` instead
    - If a network split occurred, what is the first block where forks diverge? What is special about that block?
    - If you suspect a specific EIP is involved, use `search(type="eips", query="<EIP topic or number>")` to fetch the specification and confirm or rule out a faulty implementation.
 
-   Append theories and reasoning to the debug report. **When a hypothesis pinpoints a specific block, transaction, slot, validator, or instance, cite it per the Citations section so the user can replay the data offline against a non-suspect peer.**
+   Append theories and reasoning to the debug report. **When a hypothesis pinpoints a specific block, transaction, slot, validator, or instance, cite it per the Citations section so the user can verify it independently.**
 
 ### RPC Validation (requires `has_ethnode = true`)
 
