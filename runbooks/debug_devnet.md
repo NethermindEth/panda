@@ -45,36 +45,11 @@ If two sources disagree (e.g. Dora says 16 nodes, Loki labels show 30), surface 
 
 ## Citations
 
-In this runbook, a *citation* is a `panda` command that re-derives the cited evidence. Every finding you record — both in the debug report and in chat output to the user — MUST be followed by the citation(s) that produce it, so the user can run them and verify the result independently. Citations are claim-anchored, not exhaustive: cite the calls that support a finding, not every probe along the way.
+A *citation* is a `panda` command that re-derives the cited evidence. Every finding you record — both in the debug report and in chat output — MUST be followed by the citation(s) that produce it, so the user can run them and verify independently. Citations are claim-anchored, not exhaustive: cite the calls that support a finding, not every probe along the way.
 
-**Format.** Place citations directly under the finding they support, in a fenced shell block. Each command preceded by a one-line `#` comment saying what it fetches and why.
+Place each citation directly under the finding, in a fenced shell block, with a one-line `#` comment saying what it fetches. Discover the current command surface with `panda --help` (and subcommand `--help`) — do not hardcode flags or subcommands from memory. For per-node JSON-RPC and beacon API calls use the `panda ethnode` group; for ClickHouse / Loki findings cite the exact `panda execute --code '...'` invocation used.
 
-**Peer selection.** When a single client implementation is suspected (e.g. an EL bug), citations MUST target a different client implementation discovered in Phase 0, so the verification call returns canonical data rather than re-confirming the suspect's behavior. Never cite against the suspect node.
-
-**Artifact → citation catalog.** Cite using the `panda ethnode` surface (`panda ethnode --help` for full list). For ClickHouse / Loki findings, cite the exact `panda execute --code '...'` invocation used.
-
-| Artifact | Citation |
-|---|---|
-| Block by hash | `panda ethnode exec-rpc <network> <healthy-instance> eth_getBlockByHash '["<hash>", true]'` |
-| Block by number | `panda ethnode exec-rpc <network> <healthy-instance> eth_getBlockByNumber '["<num-or-tag>", true]'` |
-| Transaction | `panda ethnode exec-rpc <network> <healthy-instance> eth_getTransactionByHash '["<tx-hash>"]'` |
-| Receipt | `panda ethnode exec-rpc <network> <healthy-instance> eth_getTransactionReceipt '["<tx-hash>"]'` |
-| Beacon block at slot | `panda ethnode header <network> <instance> <slot>` and/or `panda ethnode beacon-get <network> <instance> /eth/v2/beacon/blocks/<slot>` |
-| Validator | `panda ethnode beacon-get <network> <instance> /eth/v1/beacon/states/head/validators/<index>` |
-| Node state (offline / stuck / desynced) | `panda ethnode syncing\|finality\|peers\|version\|health <network> <instance>` |
-| ClickHouse / Loki finding | `panda execute --code '...'` with the exact query and timeframe used |
-
-**Example.** A finding such as *"the failing block on `bal-devnet-5` was `0xe44e…`, with a bad transaction at index 2"* should be cited:
-
-```bash
-# Parent block + state root, fetched from a non-suspect EL for offline replay
-panda ethnode exec-rpc bal-devnet-5 lighthouse-geth-1 \
-  eth_getBlockByHash '["0xe44efb33a509cf46e68cd991314da8a1fb09cd8367466d3977e18ce5dc198189", true]'
-
-# The failing block's tx at index 2
-panda ethnode exec-rpc bal-devnet-5 lighthouse-geth-1 \
-  eth_getTransactionByHash '["0x3b1f21a097ebf3ab352c3b1652ca468d23afc8814ba10d0eaf66134f998b7eb7"]'
-```
+**Peer selection.** When a single client implementation is suspected (e.g. an EL bug), citations MUST target a different client implementation discovered in Phase 0, so the verification call returns canonical data rather than re-confirming the suspect. Never cite against the suspect node.
 
 ## Timeframe Rules
 
