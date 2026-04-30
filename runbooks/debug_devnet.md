@@ -47,9 +47,9 @@ If two sources disagree (e.g. Dora says 16 nodes, Loki labels show 30), surface 
 
 A *citation* is a `panda` command that re-derives the cited evidence. Every finding you record — both in the debug report and in chat output — MUST be followed by the citation(s) that produce it, so the user can run them and verify independently. Citations are claim-anchored, not exhaustive: cite the calls that support a finding, not every probe along the way.
 
-Place each citation directly under the finding, in a fenced shell block, with a one-line `#` comment saying what it fetches. Discover the current command surface with `panda --help` (and subcommand `--help`) — do not hardcode flags or subcommands from memory. For per-node JSON-RPC and beacon API calls use the `panda ethnode` group; for ClickHouse / Loki findings cite the exact `panda execute --code '...'` invocation used.
+Place each citation directly under the finding, in a fenced shell block, with a one-line `#` comment saying what it fetches. Discover the current command surface with `panda --help` (and subcommand `--help`) — do not hardcode flags or subcommands from memory.
 
-**Peer selection.** When a single client implementation is suspected (e.g. an EL bug), citations MUST target a different client implementation discovered in Phase 0, so the verification call returns canonical data rather than re-confirming the suspect. Never cite against the suspect node.
+**Peer selection.** Run citation commands against a known-healthy peer, not the node you suspect is broken — otherwise the verification just re-reads the same bad state.
 
 ## Timeframe Rules
 
