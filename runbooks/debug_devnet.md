@@ -43,6 +43,12 @@ If the user states a fact (e.g. "we have 16 nodes"), do not let it bias tool out
 
 If two sources disagree (e.g. Dora says 16 nodes, Loki labels show 30), surface the disagreement rather than picking one. Dora is authoritative for *what nodes exist*; Loki is authoritative for *what nodes are shipping logs*. They are not interchangeable.
 
+## Citations
+
+A *citation* is a `panda` command that re-derives the cited evidence. Every finding you record — both in the debug report and in chat output — MUST be followed by the citation(s) that produce it, so the user can run them and verify independently. Citations are claim-anchored, not exhaustive: cite the calls that support a finding, not every probe along the way.
+
+Place each citation directly under the finding, in a fenced shell block, with a one-line `#` comment saying what it fetches. Discover the current command surface with `panda --help` (and subcommand `--help`) — do not hardcode flags or subcommands from memory.
+
 ## Timeframe Rules
 
 All steps in this runbook MUST use the same consistent timeframe OR there must be a reason to change the timeframe. Determine the **active timeframe** once and use it everywhere. If you update the **active timeframe** mid debugging, then mention it in the raw dump:
@@ -149,7 +155,7 @@ Before collecting data, determine which datasources have the target network.
    - Which specific nodes/validators are offline or underperforming?
    - If there are multiple forks, which nodes are on which fork?
 
-   Append the baseline summary to the debug report as a readable narrative. You SHOULD generate Dora links for relevant epochs, slots, and validators using the `dora.link_*()` helpers (see query skill).
+   Append the baseline summary to the debug report as a readable narrative. You SHOULD generate Dora links for relevant epochs, slots, and validators using the `dora.link_*()` helpers (see query skill). **Cite each named node, validator, slot, or fork-tip block per the Citations section.**
 
    **If Dora shows a healthy network** (no splits, finality on track, high participation, no offline nodes) but the user reports issues, present the healthy baseline to the user and ask them for more details about what they're observing. You MAY proceed to Loki only if you have a specific target — otherwise let the user guide the next step.
 
@@ -229,7 +235,7 @@ If `message` is still empty after `| json`, try `{{.log}}` or `{{.msg}}` instead
    - If a network split occurred, what is the first block where forks diverge? What is special about that block?
    - If you suspect a specific EIP is involved, use `search(type="eips", query="<EIP topic or number>")` to fetch the specification and confirm or rule out a faulty implementation.
 
-   Append theories and reasoning to the debug report.
+   Append theories and reasoning to the debug report. **When a hypothesis pinpoints a specific block, transaction, slot, validator, or instance, cite it per the Citations section so the user can verify it independently.**
 
 ### RPC Validation (requires `has_ethnode = true`)
 
@@ -241,7 +247,7 @@ If `message` is still empty after `| json`, try `{{.log}}` or `{{.msg}}` instead
 - **Verifying a hypothesis** → query nodes directly via `beacon_get` / `execution_rpc`
 - **Finality stalled** → compare finality checkpoints across all nodes
 
-Append all RPC query results and analysis to the debug report.
+Append all RPC query results and analysis to the debug report. **The `panda ethnode` invocation that produced each RPC result is itself the citation for any finding it supports — record it alongside the result per the Citations section.**
 
 9. **Summarize findings** - You MUST present the user with:
    - A clear description of what is happening (symptoms)
@@ -249,6 +255,7 @@ Append all RPC query results and analysis to the debug report.
    - Which nodes/clients are affected
    - Dora links for relevant slots, epochs, and validators (if Dora was available)
    - Suggested next steps (e.g. restart a node, report a client bug, check infrastructure)
+   - **Citations** for every concrete artifact named above (block, transaction, slot, validator, instance) per the Citations section, so the user can independently verify each claim
 
    Append the summary to the debug report. You MUST provide the user with the file path.
 
