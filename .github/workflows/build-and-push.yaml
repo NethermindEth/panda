@@ -9,25 +9,41 @@ on:
         type: string
         default: ""
       version:
-        description: "Version string for ldflags (e.g., pr-42, master-abc1234)"
-        required: true
+        description: "Version string for ldflags (e.g., pr-42, master-abc1234). Auto-derived if empty."
+        required: false
         type: string
+        default: ""
       server-tags:
-        description: "Comma-separated Docker tags for server image"
-        required: true
+        description: "Comma-separated Docker tags for server image. Auto-derived if empty."
+        required: false
         type: string
+        default: ""
       cli-tags:
-        description: "Comma-separated Docker tags for CLI image"
-        required: true
+        description: "Comma-separated Docker tags for CLI image. Auto-derived if empty."
+        required: false
         type: string
+        default: ""
       proxy-tags:
-        description: "Comma-separated Docker tags for proxy image"
-        required: true
+        description: "Comma-separated Docker tags for proxy image. Auto-derived if empty."
+        required: false
         type: string
+        default: ""
       sandbox-tags:
-        description: "Comma-separated Docker tags for sandbox image"
+        description: "Comma-separated Docker tags for sandbox image. Auto-derived if empty."
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to build from"
         required: true
         type: string
+      tag-suffix:
+        description: "Optional suffix appended to the immutable tags (defaults to short SHA)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -45,13 +61,48 @@ jobs:
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
 
-      - name: Resolve build SHA
-        id: build-sha
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Resolve build metadata
+        id: meta
+        env:
+          REF_INPUT: ${{ inputs.ref }}
+          VERSION_INPUT: ${{ inputs.version }}
+          SERVER_TAGS_INPUT: ${{ inputs.server-tags }}
+          CLI_TAGS_INPUT: ${{ inputs.cli-tags }}
+          PROXY_TAGS_INPUT: ${{ inputs.proxy-tags }}
+          SANDBOX_TAGS_INPUT: ${{ inputs.sandbox-tags }}
+          TAG_SUFFIX_INPUT: ${{ inputs.tag-suffix }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_LOWER=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')
 
-      - name: Normalize image name
-        id: image
-        run: echo "name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          SLUG=$(printf '%s' "$REF_INPUT" \
+            | sed 's|[^a-zA-Z0-9._-]|-|g' \
+            | sed 's/--*/-/g' \
+            | sed 's/^[-.]*//;s/[-.]*$//' \
+            | tr '[:upper:]' '[:lower:]')
+          if [ -z "$SLUG" ]; then
+            SLUG="dispatch"
+          fi
+          SUFFIX="${TAG_SUFFIX_INPUT:-$SHORT_SHA}"
+
+          VERSION="${VERSION_INPUT:-branch-${SLUG}-${SHORT_SHA}}"
+          SERVER_TAGS="${SERVER_TAGS_INPUT:-server-branch-${SLUG}-${SUFFIX},server-branch-${SLUG}}"
+          CLI_TAGS="${CLI_TAGS_INPUT:-branch-${SLUG}-${SUFFIX},branch-${SLUG}}"
+          PROXY_TAGS="${PROXY_TAGS_INPUT:-proxy-branch-${SLUG}-${SUFFIX},proxy-branch-${SLUG}}"
+          SANDBOX_TAGS="${SANDBOX_TAGS_INPUT:-sandbox-branch-${SLUG}-${SUFFIX},sandbox-branch-${SLUG}}"
+
+          {
+            echo "sha=$SHA"
+            echo "short-sha=$SHORT_SHA"
+            echo "image=$IMAGE_LOWER"
+            echo "slug=$SLUG"
+            echo "version=$VERSION"
+            echo "server-tags=$SERVER_TAGS"
+            echo "cli-tags=$CLI_TAGS"
+            echo "proxy-tags=$PROXY_TAGS"
+            echo "sandbox-tags=$SANDBOX_TAGS"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v5
         with:
@@ -70,8 +121,8 @@ jobs:
 
       - name: Build binaries
         env:
-          VERSION: ${{ inputs.version }}
-          SHA: ${{ steps.build-sha.outputs.sha }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
         run: |
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           LDFLAGS="-s -w \
@@ -90,8 +141,8 @@ jobs:
 
       - name: Build and push server image
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
-          TAGS_INPUT: ${{ inputs.server-tags }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}
+          TAGS_INPUT: ${{ steps.meta.outputs.server-tags }}
         run: |
           TAGS=""
           IFS=',' read -ra TAG_ARRAY <<< "${TAGS_INPUT}"
@@ -107,8 +158,8 @@ jobs:
 
       - name: Build and push CLI image
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
-          TAGS_INPUT: ${{ inputs.cli-tags }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}
+          TAGS_INPUT: ${{ steps.meta.outputs.cli-tags }}
         run: |
           TAGS=""
           IFS=',' read -ra TAG_ARRAY <<< "${TAGS_INPUT}"
@@ -124,8 +175,8 @@ jobs:
 
       - name: Build and push proxy image
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
-          TAGS_INPUT: ${{ inputs.proxy-tags }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}
+          TAGS_INPUT: ${{ steps.meta.outputs.proxy-tags }}
         run: |
           TAGS=""
           IFS=',' read -ra TAG_ARRAY <<< "${TAGS_INPUT}"
@@ -141,8 +192,8 @@ jobs:
 
       - name: Build and push sandbox image
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
-          TAGS_INPUT: ${{ inputs.sandbox-tags }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}
+          TAGS_INPUT: ${{ steps.meta.outputs.sandbox-tags }}
         run: |
           TAGS=""
           IFS=',' read -ra TAG_ARRAY <<< "${TAGS_INPUT}"
@@ -155,3 +206,27 @@ jobs:
             --file sandbox/Dockerfile \
             ${TAGS} \
             --push .
+
+      - name: Job summary
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.meta.outputs.image }}
+          REF: ${{ inputs.ref }}
+          SHA: ${{ steps.meta.outputs.short-sha }}
+          SERVER_TAGS: ${{ steps.meta.outputs.server-tags }}
+          CLI_TAGS: ${{ steps.meta.outputs.cli-tags }}
+          PROXY_TAGS: ${{ steps.meta.outputs.proxy-tags }}
+          SANDBOX_TAGS: ${{ steps.meta.outputs.sandbox-tags }}
+        run: |
+          first_tag() { echo "$1" | cut -d',' -f1; }
+          {
+            echo "### Docker images pushed"
+            echo ""
+            echo "Ref: \`${REF:-${GITHUB_REF}}\` (commit \`${SHA}\`)"
+            echo ""
+            echo "| Component | Image |"
+            echo "|-----------|-------|"
+            echo "| Server | \`${IMAGE}:$(first_tag "$SERVER_TAGS")\` |"
+            echo "| CLI | \`${IMAGE}:$(first_tag "$CLI_TAGS")\` |"
+            echo "| Proxy | \`${IMAGE}:$(first_tag "$PROXY_TAGS")\` |"
+            echo "| Sandbox | \`${IMAGE}:$(first_tag "$SANDBOX_TAGS")\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
