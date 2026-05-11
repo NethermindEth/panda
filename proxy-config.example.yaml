@@ -21,7 +21,7 @@ auth:
   # - "none": No authentication (for local development only - DEFAULT)
   # - "oauth": Embedded GitHub-backed OAuth issuer hosted by panda-proxy
   # - "oidc": External OpenID Connect issuer (Dex, authentik, Keycloak, ...)
-  mode: none  # Use 'oauth' or 'oidc' for hosted remote access
+  mode: none # Use 'oauth' or 'oidc' for hosted remote access
 
   # External URL used for OAuth metadata, callbacks, and token validation.
   # Required when mode is "oauth" or "oidc".
@@ -113,6 +113,24 @@ loki:
 #   password: "${ETHPANDAOPS_ETHNODE_PASSWORD}"
 #   allowed_orgs:
 #     - ethpandaops
+
+# Custom Ethereum node endpoints — user-defined beacon and execution URLs. Networks are addressed by
+# /custom/beacon/<network>/<instance>/... and /custom/execution/<network>/<instance>/...
+# Each node provides its own basic-auth credentials, shared between EL and CL.
+# Network and instance names must match [a-z0-9-] (same regex as ethnode).
+# custom_ethnode:
+#   allowed_orgs:
+#     - ethpandaops
+#   networks:
+#     my-net:
+#       - instance: node-1
+#         beacon_url:    "https://cl.example.com"
+#         execution_url: "https://el.example.com"
+#         username:      "${MY_NET_NODE_1_USERNAME}"
+#         password:      "${MY_NET_NODE_1_PASSWORD}"
+#       - instance: node-2
+#         beacon_url:    "https://cl-2.example.com"
+#         execution_url: "https://el-2.example.com"
 
 # Embedding API (optional — enables remote embedding for semantic search)
 # embedding:

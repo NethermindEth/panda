@@ -179,6 +179,13 @@ func (a *App) initModules(proxyClient proxy.Client) error {
 		})
 	}
 
+	if proxyClient.CustomEthNodeAvailable() {
+		discovered = append(discovered, types.DatasourceInfo{
+			Type: "custom_ethnode",
+			Name: "custom_ethnode",
+		})
+	}
+
 	for _, name := range reg.All() {
 		// Try proxy discovery for modules that support it.
 		if len(discovered) > 0 {

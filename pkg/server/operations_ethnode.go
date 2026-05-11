@@ -16,46 +16,82 @@ import (
 
 var ethnodeSegmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
 
+// ethNodeRoute selects which proxy URL prefix the server-side operation should
+// use when forwarding to the proxy. The ethpandaops template handler is
+// mounted at /beacon and /execution; the user-defined node handler is mounted
+// at /custom/beacon and /custom/execution.
+type ethNodeRoute struct {
+	beaconPrefix    string
+	executionPrefix string
+}
+
+var (
+	defaultEthNodeRoute = ethNodeRoute{
+		beaconPrefix:    "/beacon",
+		executionPrefix: "/execution",
+	}
+	customEthNodeRoute = ethNodeRoute{
+		beaconPrefix:    "/custom/beacon",
+		executionPrefix: "/custom/execution",
+	}
+)
+
 func (s *service) handleEthNodeOperation(operationID string, w http.ResponseWriter, r *http.Request) bool {
-	switch operationID {
-	case "ethnode.beacon_get":
-		s.handleEthNodeBeaconGet(w, r)
-	case "ethnode.beacon_post":
-		s.handleEthNodeBeaconPost(w, r)
-	case "ethnode.execution_rpc":
-		s.handleEthNodeExecutionRPC(w, r)
-	case "ethnode.get_node_version":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/node/version")
-	case "ethnode.get_node_syncing":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/node/syncing")
-	case "ethnode.get_peers":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/node/peers")
-	case "ethnode.get_peer_count":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/node/peer_count")
-	case "ethnode.get_beacon_headers":
-		s.handleEthNodeBeaconHeaders(w, r)
-	case "ethnode.get_finality_checkpoints":
-		s.handleEthNodeFinalityCheckpoints(w, r)
-	case "ethnode.get_config_spec":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/config/spec")
-	case "ethnode.get_fork_schedule":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/config/fork_schedule")
-	case "ethnode.get_deposit_contract":
-		s.handleEthNodeCuratedBeaconGet(w, r, "/eth/v1/config/deposit_contract")
-	case "ethnode.get_node_health":
-		s.handleEthNodeHealth(w, r)
-	case "ethnode.eth_block_number":
-		s.handleEthNodeHexRPC(w, r, "eth_blockNumber", "block_number")
-	case "ethnode.eth_syncing":
-		s.handleEthNodeExecutionRPCMethod(w, r, "eth_syncing")
-	case "ethnode.eth_chain_id":
-		s.handleEthNodeHexRPC(w, r, "eth_chainId", "chain_id")
-	case "ethnode.eth_get_block_by_number":
-		s.handleEthNodeGetBlockByNumber(w, r)
-	case "ethnode.net_peer_count":
-		s.handleEthNodeHexRPC(w, r, "net_peerCount", "peer_count")
-	case "ethnode.web3_client_version":
-		s.handleEthNodeExecutionRPCMethod(w, r, "web3_clientVersion")
+	var (
+		route ethNodeRoute
+		op    string
+	)
+
+	switch {
+	case strings.HasPrefix(operationID, "ethnode."):
+		route = defaultEthNodeRoute
+		op = strings.TrimPrefix(operationID, "ethnode.")
+	case strings.HasPrefix(operationID, "custom_ethnode."):
+		route = customEthNodeRoute
+		op = strings.TrimPrefix(operationID, "custom_ethnode.")
+	default:
+		return false
+	}
+
+	switch op {
+	case "beacon_get":
+		s.handleEthNodeBeaconGet(w, r, route)
+	case "beacon_post":
+		s.handleEthNodeBeaconPost(w, r, route)
+	case "execution_rpc":
+		s.handleEthNodeExecutionRPC(w, r, route)
+	case "get_node_version":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/node/version")
+	case "get_node_syncing":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/node/syncing")
+	case "get_peers":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/node/peers")
+	case "get_peer_count":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/node/peer_count")
+	case "get_beacon_headers":
+		s.handleEthNodeBeaconHeaders(w, r, route)
+	case "get_finality_checkpoints":
+		s.handleEthNodeFinalityCheckpoints(w, r, route)
+	case "get_config_spec":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/config/spec")
+	case "get_fork_schedule":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/config/fork_schedule")
+	case "get_deposit_contract":
+		s.handleEthNodeCuratedBeaconGet(w, r, route, "/eth/v1/config/deposit_contract")
+	case "get_node_health":
+		s.handleEthNodeHealth(w, r, route)
+	case "eth_block_number":
+		s.handleEthNodeHexRPC(w, r, route, "eth_blockNumber", "block_number")
+	case "eth_syncing":
+		s.handleEthNodeExecutionRPCMethod(w, r, route, "eth_syncing")
+	case "eth_chain_id":
+		s.handleEthNodeHexRPC(w, r, route, "eth_chainId", "chain_id")
+	case "eth_get_block_by_number":
+		s.handleEthNodeGetBlockByNumber(w, r, route)
+	case "net_peer_count":
+		s.handleEthNodeHexRPC(w, r, route, "net_peerCount", "peer_count")
+	case "web3_client_version":
+		s.handleEthNodeExecutionRPCMethod(w, r, route, "web3_clientVersion")
 	default:
 		return false
 	}
@@ -63,7 +99,7 @@ func (s *service) handleEthNodeOperation(operationID string, w http.ResponseWrit
 	return true
 }
 
-func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -78,6 +114,7 @@ func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request)
 
 	body, contentType, status, err := s.ethNodeBeaconRequestRaw(
 		r.Context(),
+		route,
 		http.MethodGet,
 		network,
 		instance,
@@ -93,7 +130,7 @@ func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request)
 	writePassthroughResponse(w, http.StatusOK, contentType, body)
 }
 
-func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -108,6 +145,7 @@ func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request
 
 	body, contentType, status, err := s.ethNodeBeaconRequestRaw(
 		r.Context(),
+		route,
 		http.MethodPost,
 		network,
 		instance,
@@ -123,7 +161,7 @@ func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request
 	writePassthroughResponse(w, http.StatusOK, contentType, body)
 }
 
-func (s *service) handleEthNodeExecutionRPC(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeExecutionRPC(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -142,7 +180,7 @@ func (s *service) handleEthNodeExecutionRPC(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	body, contentType, status, err := s.ethNodeExecutionRPCRaw(r.Context(), network, instance, method, optionalSliceArg(req.Args, "params"))
+	body, contentType, status, err := s.ethNodeExecutionRPCRaw(r.Context(), route, network, instance, method, optionalSliceArg(req.Args, "params"))
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -151,7 +189,7 @@ func (s *service) handleEthNodeExecutionRPC(w http.ResponseWriter, r *http.Reque
 	writePassthroughResponse(w, http.StatusOK, contentType, body)
 }
 
-func (s *service) handleEthNodeCuratedBeaconGet(w http.ResponseWriter, r *http.Request, path string) {
+func (s *service) handleEthNodeCuratedBeaconGet(w http.ResponseWriter, r *http.Request, route ethNodeRoute, path string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -164,7 +202,7 @@ func (s *service) handleEthNodeCuratedBeaconGet(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	data, status, err := s.ethNodeBeaconRequest(r.Context(), http.MethodGet, network, instance, path, nil, nil)
+	data, status, err := s.ethNodeBeaconRequest(r.Context(), route, http.MethodGet, network, instance, path, nil, nil)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -181,7 +219,7 @@ func (s *service) handleEthNodeCuratedBeaconGet(w http.ResponseWriter, r *http.R
 	})
 }
 
-func (s *service) handleEthNodeBeaconHeaders(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeBeaconHeaders(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -193,10 +231,10 @@ func (s *service) handleEthNodeBeaconHeaders(w http.ResponseWriter, r *http.Requ
 		slot = "head"
 	}
 
-	s.handleEthNodeCuratedBeaconPath(w, r, req, fmt.Sprintf("/eth/v1/beacon/headers/%s", slot))
+	s.handleEthNodeCuratedBeaconPath(w, r, route, req, fmt.Sprintf("/eth/v1/beacon/headers/%s", slot))
 }
 
-func (s *service) handleEthNodeFinalityCheckpoints(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeFinalityCheckpoints(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -208,17 +246,17 @@ func (s *service) handleEthNodeFinalityCheckpoints(w http.ResponseWriter, r *htt
 		stateID = "head"
 	}
 
-	s.handleEthNodeCuratedBeaconPath(w, r, req, fmt.Sprintf("/eth/v1/beacon/states/%s/finality_checkpoints", stateID))
+	s.handleEthNodeCuratedBeaconPath(w, r, route, req, fmt.Sprintf("/eth/v1/beacon/states/%s/finality_checkpoints", stateID))
 }
 
-func (s *service) handleEthNodeCuratedBeaconPath(w http.ResponseWriter, r *http.Request, req operations.Request, path string) {
+func (s *service) handleEthNodeCuratedBeaconPath(w http.ResponseWriter, r *http.Request, route ethNodeRoute, req operations.Request, path string) {
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	data, status, err := s.ethNodeBeaconRequest(r.Context(), http.MethodGet, network, instance, path, nil, nil)
+	data, status, err := s.ethNodeBeaconRequest(r.Context(), route, http.MethodGet, network, instance, path, nil, nil)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -235,7 +273,7 @@ func (s *service) handleEthNodeCuratedBeaconPath(w http.ResponseWriter, r *http.
 	})
 }
 
-func (s *service) handleEthNodeHealth(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeHealth(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -248,7 +286,7 @@ func (s *service) handleEthNodeHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statusCode, status, err := s.ethNodeBeaconHealthRequest(r.Context(), network, instance)
+	statusCode, status, err := s.ethNodeBeaconHealthRequest(r.Context(), route, network, instance)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -264,7 +302,7 @@ func (s *service) handleEthNodeHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *service) handleEthNodeHexRPC(w http.ResponseWriter, r *http.Request, method, field string) {
+func (s *service) handleEthNodeHexRPC(w http.ResponseWriter, r *http.Request, route ethNodeRoute, method, field string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -277,7 +315,7 @@ func (s *service) handleEthNodeHexRPC(w http.ResponseWriter, r *http.Request, me
 		return
 	}
 
-	result, status, err := s.ethNodeExecutionRPC(r.Context(), network, instance, method, nil)
+	result, status, err := s.ethNodeExecutionRPC(r.Context(), route, network, instance, method, nil)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -309,7 +347,7 @@ func (s *service) handleEthNodeHexRPC(w http.ResponseWriter, r *http.Request, me
 	})
 }
 
-func (s *service) handleEthNodeExecutionRPCMethod(w http.ResponseWriter, r *http.Request, method string) {
+func (s *service) handleEthNodeExecutionRPCMethod(w http.ResponseWriter, r *http.Request, route ethNodeRoute, method string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -322,7 +360,7 @@ func (s *service) handleEthNodeExecutionRPCMethod(w http.ResponseWriter, r *http
 		return
 	}
 
-	result, status, err := s.ethNodeExecutionRPC(r.Context(), network, instance, method, nil)
+	result, status, err := s.ethNodeExecutionRPC(r.Context(), route, network, instance, method, nil)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -339,7 +377,7 @@ func (s *service) handleEthNodeExecutionRPCMethod(w http.ResponseWriter, r *http
 	})
 }
 
-func (s *service) handleEthNodeGetBlockByNumber(w http.ResponseWriter, r *http.Request) {
+func (s *service) handleEthNodeGetBlockByNumber(w http.ResponseWriter, r *http.Request, route ethNodeRoute) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -359,7 +397,7 @@ func (s *service) handleEthNodeGetBlockByNumber(w http.ResponseWriter, r *http.R
 
 	fullTx, _ := req.Args["full_tx"].(bool)
 
-	result, status, err := s.ethNodeExecutionRPC(r.Context(), network, instance, "eth_getBlockByNumber", []any{block, fullTx})
+	result, status, err := s.ethNodeExecutionRPC(r.Context(), route, network, instance, "eth_getBlockByNumber", []any{block, fullTx})
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -418,11 +456,12 @@ func parseEthNodeNodeArgs(args map[string]any) (string, string, error) {
 
 func (s *service) ethNodeBeaconRequest(
 	ctx context.Context,
+	route ethNodeRoute,
 	method, network, instance, path string,
 	params map[string]any,
 	body any,
 ) (any, int, error) {
-	responseBody, _, status, err := s.ethNodeBeaconRequestRaw(ctx, method, network, instance, path, params, body)
+	responseBody, _, status, err := s.ethNodeBeaconRequestRaw(ctx, route, method, network, instance, path, params, body)
 	if err != nil {
 		return nil, status, err
 	}
@@ -441,6 +480,7 @@ func (s *service) ethNodeBeaconRequest(
 
 func (s *service) ethNodeBeaconRequestRaw(
 	ctx context.Context,
+	route ethNodeRoute,
 	method, network, instance, path string,
 	params map[string]any,
 	body any,
@@ -450,7 +490,7 @@ func (s *service) ethNodeBeaconRequestRaw(
 		values.Set(key, fmt.Sprint(value))
 	}
 
-	requestPath := "/beacon/" + network + "/" + instance + path
+	requestPath := route.beaconPrefix + "/" + network + "/" + instance + path
 	if len(values) > 0 {
 		requestPath += "?" + values.Encode()
 	}
@@ -486,8 +526,8 @@ func (s *service) ethNodeBeaconRequestRaw(
 	return data, contentType, http.StatusOK, nil
 }
 
-func (s *service) ethNodeBeaconHealthRequest(ctx context.Context, network, instance string) (int, int, error) {
-	_, status, _, err := s.proxyRequest(ctx, http.MethodGet, "/beacon/"+network+"/"+instance+"/eth/v1/node/health", nil, nil)
+func (s *service) ethNodeBeaconHealthRequest(ctx context.Context, route ethNodeRoute, network, instance string) (int, int, error) {
+	_, status, _, err := s.proxyRequest(ctx, http.MethodGet, route.beaconPrefix+"/"+network+"/"+instance+"/eth/v1/node/health", nil, nil)
 	if err != nil {
 		return 0, http.StatusBadGateway, err
 	}
@@ -497,10 +537,11 @@ func (s *service) ethNodeBeaconHealthRequest(ctx context.Context, network, insta
 
 func (s *service) ethNodeExecutionRPC(
 	ctx context.Context,
+	route ethNodeRoute,
 	network, instance, method string,
 	params []any,
 ) (any, int, error) {
-	body, _, status, err := s.ethNodeExecutionRPCRaw(ctx, network, instance, method, params)
+	body, _, status, err := s.ethNodeExecutionRPCRaw(ctx, route, network, instance, method, params)
 	if err != nil {
 		return nil, status, err
 	}
@@ -517,6 +558,7 @@ func (s *service) ethNodeExecutionRPC(
 
 func (s *service) ethNodeExecutionRPCRaw(
 	ctx context.Context,
+	route ethNodeRoute,
 	network, instance, method string,
 	params []any,
 ) ([]byte, string, int, error) {
@@ -533,7 +575,7 @@ func (s *service) ethNodeExecutionRPCRaw(
 	data, status, responseHeaders, err := s.proxyRequest(
 		ctx,
 		http.MethodPost,
-		"/execution/"+network+"/"+instance+"/",
+		route.executionPrefix+"/"+network+"/"+instance+"/",
 		bytes.NewReader(payload),
 		http.Header{"Content-Type": []string{"application/json"}},
 	)

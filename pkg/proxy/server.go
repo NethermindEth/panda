@@ -54,12 +54,13 @@ type server struct {
 	rateLimiter   *RateLimiter
 	auditor       *Auditor
 
-	clickhouseHandler *handlers.ClickHouseHandler
-	prometheusHandler *handlers.PrometheusHandler
-	lokiHandler       *handlers.LokiHandler
-	ethNodeHandler    *handlers.EthNodeHandler
-	embeddingService  *EmbeddingService
-	githubHandler     *handlers.GitHubHandler
+	clickhouseHandler    *handlers.ClickHouseHandler
+	prometheusHandler    *handlers.PrometheusHandler
+	lokiHandler          *handlers.LokiHandler
+	ethNodeHandler       *handlers.EthNodeHandler
+	customEthNodeHandler *handlers.CustomEthNodeHandler
+	embeddingService     *EmbeddingService
+	githubHandler        *handlers.GitHubHandler
 
 	mu      sync.RWMutex
 	started bool
@@ -140,7 +141,7 @@ func newServer(log logrus.FieldLogger, cfg ServerConfig, hostURL, port string) (
 	s.authorizer = NewAuthorizer(log, cfg)
 
 	// Create handlers from config.
-	chConfigs, promConfigs, lokiConfigs, ethNodeConfig := cfg.ToHandlerConfigs()
+	chConfigs, promConfigs, lokiConfigs, ethNodeConfig, customEthNodeConfig := cfg.ToHandlerConfigs()
 
 	if len(chConfigs) > 0 {
 		s.clickhouseHandler = handlers.NewClickHouseHandler(log, chConfigs)
@@ -156,6 +157,10 @@ func newServer(log logrus.FieldLogger, cfg ServerConfig, hostURL, port string) (
 
 	if ethNodeConfig != nil {
 		s.ethNodeHandler = handlers.NewEthNodeHandler(log, *ethNodeConfig)
+	}
+
+	if customEthNodeConfig != nil {
+		s.customEthNodeHandler = handlers.NewCustomEthNodeHandler(log, *customEthNodeConfig)
 	}
 
 	// Create embedding service if configured.
@@ -254,6 +259,11 @@ func (s *server) registerRoutes() {
 		s.handleSubtreeRoute("/execution", s.metricsMiddleware(chain(s.ethNodeHandler)))
 	}
 
+	if s.customEthNodeHandler != nil {
+		s.handleSubtreeRoute("/custom/beacon", s.metricsMiddleware(chain(s.customEthNodeHandler)))
+		s.handleSubtreeRoute("/custom/execution", s.metricsMiddleware(chain(s.customEthNodeHandler)))
+	}
+
 	if s.githubHandler != nil {
 		s.handleSubtreeRoute("/github", s.metricsMiddleware(chain(s.githubHandler)))
 	}
@@ -298,30 +308,32 @@ func (s *server) buildMiddlewareChain() func(http.Handler) http.Handler {
 // DatasourcesResponse is the response from the /datasources endpoint.
 // This is used by the MCP server client to discover available datasources.
 type DatasourcesResponse struct {
-	ClickHouse         []string               `json:"clickhouse,omitempty"`
-	Prometheus         []string               `json:"prometheus,omitempty"`
-	Loki               []string               `json:"loki,omitempty"`
-	ClickHouseInfo     []types.DatasourceInfo `json:"clickhouse_info,omitempty"`
-	PrometheusInfo     []types.DatasourceInfo `json:"prometheus_info,omitempty"`
-	LokiInfo           []types.DatasourceInfo `json:"loki_info,omitempty"`
-	EthNodeAvailable   bool                   `json:"ethnode_available,omitempty"`
-	EmbeddingAvailable bool                   `json:"embedding_available,omitempty"`
-	EmbeddingModel     string                 `json:"embedding_model,omitempty"`
+	ClickHouse             []string               `json:"clickhouse,omitempty"`
+	Prometheus             []string               `json:"prometheus,omitempty"`
+	Loki                   []string               `json:"loki,omitempty"`
+	ClickHouseInfo         []types.DatasourceInfo `json:"clickhouse_info,omitempty"`
+	PrometheusInfo         []types.DatasourceInfo `json:"prometheus_info,omitempty"`
+	LokiInfo               []types.DatasourceInfo `json:"loki_info,omitempty"`
+	EthNodeAvailable       bool                   `json:"ethnode_available,omitempty"`
+	CustomEthNodeAvailable bool                   `json:"custom_ethnode_available,omitempty"`
+	EmbeddingAvailable     bool                   `json:"embedding_available,omitempty"`
+	EmbeddingModel         string                 `json:"embedding_model,omitempty"`
 }
 
 // handleDatasources returns the list of available datasources,
 // filtered by the authenticated user's org membership.
 func (s *server) handleDatasources(w http.ResponseWriter, r *http.Request) {
 	info := DatasourcesResponse{
-		ClickHouse:         s.ClickHouseDatasources(),
-		Prometheus:         s.PrometheusDatasources(),
-		Loki:               s.LokiDatasources(),
-		ClickHouseInfo:     s.ClickHouseDatasourceInfo(),
-		PrometheusInfo:     s.PrometheusDatasourceInfo(),
-		LokiInfo:           s.LokiDatasourceInfo(),
-		EthNodeAvailable:   s.EthNodeAvailable(),
-		EmbeddingAvailable: s.EmbeddingAvailable(),
-		EmbeddingModel:     s.EmbeddingModel(),
+		ClickHouse:             s.ClickHouseDatasources(),
+		Prometheus:             s.PrometheusDatasources(),
+		Loki:                   s.LokiDatasources(),
+		ClickHouseInfo:         s.ClickHouseDatasourceInfo(),
+		PrometheusInfo:         s.PrometheusDatasourceInfo(),
+		LokiInfo:               s.LokiDatasourceInfo(),
+		EthNodeAvailable:       s.EthNodeAvailable(),
+		CustomEthNodeAvailable: s.CustomEthNodeAvailable(),
+		EmbeddingAvailable:     s.EmbeddingAvailable(),
+		EmbeddingModel:         s.EmbeddingModel(),
 	}
 
 	if s.authorizer != nil {
@@ -632,6 +644,11 @@ func (s *server) LokiDatasourceInfo() []types.DatasourceInfo {
 // EthNodeAvailable returns true if the ethnode handler is configured.
 func (s *server) EthNodeAvailable() bool {
 	return s.ethNodeHandler != nil
+}
+
+// CustomEthNodeAvailable returns true if the custom ethnode handler is configured.
+func (s *server) CustomEthNodeAvailable() bool {
+	return s.customEthNodeHandler != nil
 }
 
 // EmbeddingAvailable returns true if the embedding service is configured.

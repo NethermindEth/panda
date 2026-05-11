@@ -46,6 +46,10 @@ func NewAuthorizer(log logrus.FieldLogger, cfg ServerConfig) *Authorizer {
 		a.rules[ruleKey("ethnode", "")] = cfg.EthNode.AllowedOrgs
 	}
 
+	if cfg.CustomEthNode != nil && len(cfg.CustomEthNode.AllowedOrgs) > 0 {
+		a.rules[ruleKey("custom_ethnode", "")] = cfg.CustomEthNode.AllowedOrgs
+	}
+
 	return a
 }
 
@@ -76,9 +80,10 @@ func (a *Authorizer) FilterDatasources(ctx context.Context, resp DatasourcesResp
 	}
 
 	filtered := DatasourcesResponse{
-		EthNodeAvailable:   resp.EthNodeAvailable && a.orgsMatch(userOrgs, ruleKey("ethnode", "")),
-		EmbeddingAvailable: resp.EmbeddingAvailable,
-		EmbeddingModel:     resp.EmbeddingModel,
+		EthNodeAvailable:       resp.EthNodeAvailable && a.orgsMatch(userOrgs, ruleKey("ethnode", "")),
+		CustomEthNodeAvailable: resp.CustomEthNodeAvailable && a.orgsMatch(userOrgs, ruleKey("custom_ethnode", "")),
+		EmbeddingAvailable:     resp.EmbeddingAvailable,
+		EmbeddingModel:         resp.EmbeddingModel,
 	}
 
 	for i, name := range resp.ClickHouse {
@@ -124,6 +129,11 @@ func (a *Authorizer) isAllowed(ctx context.Context, dsType, dsName string) bool 
 	// For ethnode, check at type level (no per-name granularity).
 	if dsType == "ethnode" {
 		return a.orgsMatch(userOrgs, ruleKey("ethnode", ""))
+	}
+
+	// For custom_ethnode, check at type level (no per-name granularity).
+	if dsType == "custom_ethnode" {
+		return a.orgsMatch(userOrgs, ruleKey("custom_ethnode", ""))
 	}
 
 	// For datasources endpoint, skip middleware check (filtered in handler).

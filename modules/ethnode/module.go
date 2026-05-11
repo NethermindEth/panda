@@ -2,6 +2,7 @@ package ethnode
 
 import (
 	"context"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -11,7 +12,9 @@ import (
 
 // Module implements the module.Module interface for direct Ethereum node API access.
 type Module struct {
-	cfg Config
+	cfg            Config
+	hasEthNode     bool
+	hasCustomNodes bool
 }
 
 // New creates a new ethnode module.
@@ -21,15 +24,23 @@ func New() *Module {
 
 func (p *Module) Name() string { return "ethnode" }
 
-// InitFromDiscovery enables the module if an ethnode datasource exists.
+// InitFromDiscovery enables the module if an ethnode or custom_ethnode
+// datasource exists.
 func (p *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 	for _, ds := range datasources {
-		if ds.Type == "ethnode" {
-			return nil // module defaults to enabled
+		switch ds.Type {
+		case "ethnode":
+			p.hasEthNode = true
+		case "custom_ethnode":
+			p.hasCustomNodes = true
 		}
 	}
 
-	return module.ErrNoValidConfig
+	if !p.hasEthNode && !p.hasCustomNodes {
+		return module.ErrNoValidConfig
+	}
+
+	return nil
 }
 
 // Enabled reports whether ethnode operations should be exposed.
@@ -53,9 +64,16 @@ func (p *Module) SandboxEnv() (map[string]string, error) {
 		return nil, nil
 	}
 
-	return map[string]string{
-		"ETHPANDAOPS_ETHNODE_AVAILABLE": "true",
-	}, nil
+	env := make(map[string]string, 2)
+	if p.hasEthNode {
+		env["ETHPANDAOPS_ETHNODE_AVAILABLE"] = "true"
+	}
+
+	if p.hasCustomNodes {
+		env["ETHPANDAOPS_CUSTOM_ETHNODE_AVAILABLE"] = "true"
+	}
+
+	return env, nil
 }
 
 // DatasourceInfo returns empty since ethnode is a pass-through proxy, not a named datasource.
@@ -83,34 +101,49 @@ func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 		return nil
 	}
 
-	return map[string]types.ModuleDoc{
-		"ethnode": {
-			Description: "Direct access to Ethereum beacon and execution node APIs",
-			Functions: map[string]types.FunctionDoc{
-				// Beacon node (CL) functions.
-				"get_node_version":         {Signature: "get_node_version(network, instance) -> dict", Description: "Get beacon node software version"},
-				"get_node_syncing":         {Signature: "get_node_syncing(network, instance) -> dict", Description: "Get beacon node sync status"},
-				"get_node_health":          {Signature: "get_node_health(network, instance) -> int", Description: "Get beacon node health status code"},
-				"get_peers":                {Signature: "get_peers(network, instance) -> dict", Description: "Get connected peers list"},
-				"get_peer_count":           {Signature: "get_peer_count(network, instance) -> dict", Description: "Get peer count summary"},
-				"get_beacon_headers":       {Signature: "get_beacon_headers(network, instance, slot='head') -> dict", Description: "Get beacon block header"},
-				"get_finality_checkpoints": {Signature: "get_finality_checkpoints(network, instance, state_id='head') -> dict", Description: "Get finality checkpoints"},
-				"get_config_spec":          {Signature: "get_config_spec(network, instance) -> dict", Description: "Get chain config spec"},
-				"get_fork_schedule":        {Signature: "get_fork_schedule(network, instance) -> dict", Description: "Get fork schedule"},
-				"get_deposit_contract":     {Signature: "get_deposit_contract(network, instance) -> dict", Description: "Get deposit contract info"},
-				// Execution node (EL) functions.
-				"eth_block_number":        {Signature: "eth_block_number(network, instance) -> int", Description: "Get latest block number"},
-				"eth_syncing":             {Signature: "eth_syncing(network, instance) -> dict | bool", Description: "Get EL sync status"},
-				"eth_chain_id":            {Signature: "eth_chain_id(network, instance) -> int", Description: "Get chain ID"},
-				"eth_get_block_by_number": {Signature: "eth_get_block_by_number(network, instance, block='latest', full_tx=False) -> dict", Description: "Get block by number"},
-				"net_peer_count":          {Signature: "net_peer_count(network, instance) -> int", Description: "Get EL peer count"},
-				"web3_client_version":     {Signature: "web3_client_version(network, instance) -> str", Description: "Get EL client version"},
-				// Generic pass-through.
-				"beacon_get":    {Signature: "beacon_get(network, instance, path, params=None) -> dict", Description: "GET any beacon API endpoint and return the raw JSON payload"},
-				"beacon_post":   {Signature: "beacon_post(network, instance, path, body=None) -> dict", Description: "POST any beacon API endpoint and return the raw JSON payload"},
-				"execution_rpc": {Signature: "execution_rpc(network, instance, method, params=None) -> any", Description: "Call any JSON-RPC method and return the raw result"},
-			},
-		},
+	docs := make(map[string]types.ModuleDoc, 2)
+
+	if p.hasEthNode {
+		docs["ethnode"] = types.ModuleDoc{
+			Description: "Direct access to Ethereum beacon and execution node APIs via the ethpandaops node naming convention",
+			Functions:   ethnodeFunctionDocs(),
+		}
+	}
+
+	if p.hasCustomNodes {
+		docs["custom_ethnode"] = types.ModuleDoc{
+			Description: "Direct access to user-defined Ethereum beacon and execution node endpoints configured on the proxy",
+			Functions:   ethnodeFunctionDocs(),
+		}
+	}
+
+	return docs
+}
+
+func ethnodeFunctionDocs() map[string]types.FunctionDoc {
+	return map[string]types.FunctionDoc{
+		// Beacon node (CL) functions.
+		"get_node_version":         {Signature: "get_node_version(network, instance) -> dict", Description: "Get beacon node software version"},
+		"get_node_syncing":         {Signature: "get_node_syncing(network, instance) -> dict", Description: "Get beacon node sync status"},
+		"get_node_health":          {Signature: "get_node_health(network, instance) -> int", Description: "Get beacon node health status code"},
+		"get_peers":                {Signature: "get_peers(network, instance) -> dict", Description: "Get connected peers list"},
+		"get_peer_count":           {Signature: "get_peer_count(network, instance) -> dict", Description: "Get peer count summary"},
+		"get_beacon_headers":       {Signature: "get_beacon_headers(network, instance, slot='head') -> dict", Description: "Get beacon block header"},
+		"get_finality_checkpoints": {Signature: "get_finality_checkpoints(network, instance, state_id='head') -> dict", Description: "Get finality checkpoints"},
+		"get_config_spec":          {Signature: "get_config_spec(network, instance) -> dict", Description: "Get chain config spec"},
+		"get_fork_schedule":        {Signature: "get_fork_schedule(network, instance) -> dict", Description: "Get fork schedule"},
+		"get_deposit_contract":     {Signature: "get_deposit_contract(network, instance) -> dict", Description: "Get deposit contract info"},
+		// Execution node (EL) functions.
+		"eth_block_number":        {Signature: "eth_block_number(network, instance) -> int", Description: "Get latest block number"},
+		"eth_syncing":             {Signature: "eth_syncing(network, instance) -> dict | bool", Description: "Get EL sync status"},
+		"eth_chain_id":            {Signature: "eth_chain_id(network, instance) -> int", Description: "Get chain ID"},
+		"eth_get_block_by_number": {Signature: "eth_get_block_by_number(network, instance, block='latest', full_tx=False) -> dict", Description: "Get block by number"},
+		"net_peer_count":          {Signature: "net_peer_count(network, instance) -> int", Description: "Get EL peer count"},
+		"web3_client_version":     {Signature: "web3_client_version(network, instance) -> str", Description: "Get EL client version"},
+		// Generic pass-through.
+		"beacon_get":    {Signature: "beacon_get(network, instance, path, params=None) -> dict", Description: "GET any beacon API endpoint and return the raw JSON payload"},
+		"beacon_post":   {Signature: "beacon_post(network, instance, path, body=None) -> dict", Description: "POST any beacon API endpoint and return the raw JSON payload"},
+		"execution_rpc": {Signature: "execution_rpc(network, instance, method, params=None) -> any", Description: "Call any JSON-RPC method and return the raw result"},
 	}
 }
 
@@ -120,7 +153,10 @@ func (p *Module) GettingStartedSnippet() string {
 		return ""
 	}
 
-	return `## Ethereum Node API (Direct Access)
+	var b strings.Builder
+
+	if p.hasEthNode {
+		b.WriteString(`## Ethereum Node API (Direct Access)
 
 Query individual beacon and execution nodes directly. Useful for checking sync status,
 peer counts, finality checkpoints, and comparing state across nodes during devnet debugging.
@@ -145,7 +181,32 @@ print(f"Finalized epoch: {checkpoints['data']['finalized']['epoch']}")
 # Generic beacon API call
 identity = ethnode.beacon_get("my-devnet", "lighthouse-geth-1", "/eth/v1/node/identity")
 ` + "```" + `
-`
+`)
+	}
+
+	if p.hasCustomNodes {
+		b.WriteString(`
+## Custom Ethereum Node API (User-Defined Endpoints)
+
+Query beacon and execution endpoints configured directly on the proxy (outside the
+ethpandaops.io DNS convention). The function surface mirrors ` + "`ethnode`" + `; ` + "`network`" + ` and
+` + "`instance`" + ` must match keys defined under ` + "`custom_ethnode.networks`" + ` in the proxy config.
+
+` + "```python" + `
+from ethpandaops import custom_ethnode
+
+# Check sync status against a self-hosted node
+syncing = custom_ethnode.get_node_syncing("my-net", "node-1")
+print(f"Head slot: {syncing['data']['head_slot']}")
+
+# Generic JSON-RPC call
+chain_id = custom_ethnode.eth_chain_id("my-net", "node-1")
+print(f"Chain ID: {chain_id}")
+` + "```" + `
+`)
+	}
+
+	return b.String()
 }
 
 func (p *Module) Start(_ context.Context) error { return nil }

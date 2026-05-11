@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -13,6 +14,10 @@ import (
 	"github.com/ethpandaops/panda/pkg/configpath"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 )
+
+// customEthNodeSegmentPattern matches the same lowercase alphanumeric + hyphen
+// segments that the ethnode handler accepts for network/instance identifiers.
+var customEthNodeSegmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
 
 // ServerConfig is the configuration for the proxy server.
 // This is the single configuration schema used for both local and K8s deployments.
@@ -34,6 +39,11 @@ type ServerConfig struct {
 
 	// EthNode holds Ethereum node API access configuration.
 	EthNode *EthNodeInstanceConfig `yaml:"ethnode,omitempty"`
+
+	// CustomEthNode holds user-defined Ethereum node endpoints, addressed at
+	// /custom/beacon|execution/{network}/{instance}/{path} and bypassing the
+	// ethpandaops.io DNS naming convention used by EthNode.
+	CustomEthNode *CustomEthNodeConfig `yaml:"custom_ethnode,omitempty"`
 
 	// RateLimiting holds rate limiting configuration.
 	RateLimiting RateLimitConfig `yaml:"rate_limiting"`
@@ -172,6 +182,37 @@ type EthNodeInstanceConfig struct {
 	BaseDatasourceConfig `yaml:",inline"`
 	Username             string `yaml:"username"`
 	Password             string `yaml:"password"`
+}
+
+// CustomEthNodeConfig configures user-defined Ethereum node endpoints, keyed by
+// network. Each network entry lists nodes with explicit beacon/execution URLs
+// and optional per-node basic-auth credentials.
+type CustomEthNodeConfig struct {
+	// AllowedOrgs restricts access to members of these GitHub orgs (type-level,
+	// same scoping as EthNode).
+	AllowedOrgs []string `yaml:"allowed_orgs,omitempty"`
+
+	// Networks maps a network name to a list of nodes belonging to that network.
+	Networks map[string][]CustomEthNodeNodeConfig `yaml:"networks"`
+}
+
+// CustomEthNodeNodeConfig holds a single user-defined node's endpoints and
+// shared basic-auth credentials.
+type CustomEthNodeNodeConfig struct {
+	// Instance is the node identifier within its network.
+	Instance string `yaml:"instance"`
+
+	// BeaconURL is the upstream consensus-layer (beacon) HTTP(S) endpoint.
+	// Optional: if empty, /custom/beacon/... requests for this node return 404.
+	BeaconURL string `yaml:"beacon_url,omitempty"`
+
+	// ExecutionURL is the upstream execution-layer HTTP(S) endpoint.
+	// Optional: if empty, /custom/execution/... requests for this node return 404.
+	ExecutionURL string `yaml:"execution_url,omitempty"`
+
+	// Username and Password are basic-auth credentials applied to both EL and CL.
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
 }
 
 // RateLimitConfig holds rate limiting configuration.
@@ -352,8 +393,8 @@ func (c *ServerConfig) Validate() error {
 	}
 
 	// Validate at least one datasource is configured.
-	if len(c.ClickHouse) == 0 && len(c.Prometheus) == 0 && len(c.Loki) == 0 && c.EthNode == nil {
-		return fmt.Errorf("at least one datasource (clickhouse, prometheus, loki, or ethnode) must be configured")
+	if len(c.ClickHouse) == 0 && len(c.Prometheus) == 0 && len(c.Loki) == 0 && c.EthNode == nil && c.CustomEthNode == nil {
+		return fmt.Errorf("at least one datasource (clickhouse, prometheus, loki, ethnode, or custom_ethnode) must be configured")
 	}
 
 	// Validate ClickHouse configs.
@@ -389,11 +430,81 @@ func (c *ServerConfig) Validate() error {
 		}
 	}
 
+	// Validate CustomEthNode config.
+	if c.CustomEthNode != nil {
+		if err := validateCustomEthNode(c.CustomEthNode); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateCustomEthNode(cfg *CustomEthNodeConfig) error {
+	if len(cfg.Networks) == 0 {
+		return fmt.Errorf("custom_ethnode.networks must contain at least one network")
+	}
+
+	for network, nodes := range cfg.Networks {
+		if !customEthNodeSegmentPattern.MatchString(network) {
+			return fmt.Errorf("custom_ethnode.networks: invalid network name %q (must match [a-z0-9-])", network)
+		}
+
+		seen := make(map[string]struct{}, len(nodes))
+		for i, node := range nodes {
+			if node.Instance == "" {
+				return fmt.Errorf("custom_ethnode.networks[%s][%d].instance is required", network, i)
+			}
+
+			if !customEthNodeSegmentPattern.MatchString(node.Instance) {
+				return fmt.Errorf("custom_ethnode.networks[%s][%d].instance %q is invalid (must match [a-z0-9-])", network, i, node.Instance)
+			}
+
+			if _, dup := seen[node.Instance]; dup {
+				return fmt.Errorf("custom_ethnode.networks[%s]: duplicate instance %q", network, node.Instance)
+			}
+			seen[node.Instance] = struct{}{}
+
+			if node.BeaconURL == "" && node.ExecutionURL == "" {
+				return fmt.Errorf("custom_ethnode.networks[%s][%s]: at least one of beacon_url or execution_url is required", network, node.Instance)
+			}
+
+			if err := validateCustomEthNodeURL("beacon_url", network, node.Instance, node.BeaconURL); err != nil {
+				return err
+			}
+
+			if err := validateCustomEthNodeURL("execution_url", network, node.Instance, node.ExecutionURL); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateCustomEthNodeURL(field, network, instance, raw string) error {
+	if raw == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("custom_ethnode.networks[%s][%s].%s is invalid: %w", network, instance, field, err)
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("custom_ethnode.networks[%s][%s].%s must use http or https scheme (got %q)", network, instance, field, parsed.Scheme)
+	}
+
+	if parsed.Host == "" {
+		return fmt.Errorf("custom_ethnode.networks[%s][%s].%s must include a host", network, instance, field)
+	}
+
 	return nil
 }
 
 // ToHandlerConfigs converts the server config to handler configs.
-func (c *ServerConfig) ToHandlerConfigs() ([]handlers.ClickHouseConfig, []handlers.PrometheusConfig, []handlers.LokiConfig, *handlers.EthNodeConfig) {
+func (c *ServerConfig) ToHandlerConfigs() ([]handlers.ClickHouseConfig, []handlers.PrometheusConfig, []handlers.LokiConfig, *handlers.EthNodeConfig, *handlers.CustomEthNodeConfig) {
 	// Convert ClickHouse configs.
 	chConfigs := make([]handlers.ClickHouseConfig, len(c.ClickHouse))
 	for i, ch := range c.ClickHouse {
@@ -444,7 +555,27 @@ func (c *ServerConfig) ToHandlerConfigs() ([]handlers.ClickHouseConfig, []handle
 		}
 	}
 
-	return chConfigs, promConfigs, lokiConfigs, ethNodeConfig
+	// Convert CustomEthNode config.
+	var customEthNodeConfig *handlers.CustomEthNodeConfig
+	if c.CustomEthNode != nil && len(c.CustomEthNode.Networks) > 0 {
+		nodes := make(map[handlers.CustomEthNodeKey]handlers.CustomEthNodeNode)
+		for network, networkNodes := range c.CustomEthNode.Networks {
+			for _, node := range networkNodes {
+				nodes[handlers.CustomEthNodeKey{Network: network, Instance: node.Instance}] = handlers.CustomEthNodeNode{
+					BeaconURL:    node.BeaconURL,
+					ExecutionURL: node.ExecutionURL,
+					Username:     node.Username,
+					Password:     node.Password,
+				}
+			}
+		}
+
+		if len(nodes) > 0 {
+			customEthNodeConfig = &handlers.CustomEthNodeConfig{Nodes: nodes}
+		}
+	}
+
+	return chConfigs, promConfigs, lokiConfigs, ethNodeConfig, customEthNodeConfig
 }
 
 // envVarWithDefaultPattern matches ${VAR_NAME:-default} patterns.

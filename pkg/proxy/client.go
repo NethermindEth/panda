@@ -55,6 +55,9 @@ type Client interface {
 	// EthNodeAvailable returns true if the proxy has ethnode credentials configured.
 	EthNodeAvailable() bool
 
+	// CustomEthNodeAvailable returns true if the proxy has user-defined ethnode endpoints configured.
+	CustomEthNodeAvailable() bool
+
 	// EmbeddingAvailable returns true if the proxy has embedding configured.
 	EmbeddingAvailable() bool
 	// EmbeddingModel returns the configured embedding model name.
@@ -368,6 +371,14 @@ func (c *proxyClient) EthNodeAvailable() bool {
 	defer c.mu.RUnlock()
 
 	return c.datasources.EthNodeAvailable
+}
+
+// CustomEthNodeAvailable returns true if the proxy has user-defined ethnode endpoints configured.
+func (c *proxyClient) CustomEthNodeAvailable() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.datasources.CustomEthNodeAvailable
 }
 
 // EmbeddingAvailable returns true if the proxy has embedding configured.

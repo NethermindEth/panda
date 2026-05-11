@@ -165,3 +165,35 @@ ethnode_advanced:
         print(f"Block number: {block['number']}")
         print(f"Block hash: {block['hash']}")
         print(f"Transactions: {len(block.get('transactions', []))}")
+
+custom_ethnode_basic:
+  name: Custom Ethnode (User-Defined Endpoints)
+  description: Query beacon and execution endpoints configured directly on the proxy
+  examples:
+    - name: Check sync status of a custom node
+      description: Get sync status from a user-defined beacon and execution endpoint
+      query: |
+        from ethpandaops import custom_ethnode
+
+        network = "my-net"
+        instance = "node-1"
+
+        cl_syncing = custom_ethnode.get_node_syncing(network, instance)
+        print(f"CL head slot: {cl_syncing['data']['head_slot']}")
+
+        block_number = custom_ethnode.eth_block_number(network, instance)
+        print(f"EL block: {block_number}")
+
+    - name: Generic call against a custom node
+      description: Pass-through any beacon or JSON-RPC method on a custom node
+      query: |
+        from ethpandaops import custom_ethnode
+
+        network = "my-net"
+        instance = "node-1"
+
+        identity = custom_ethnode.beacon_get(network, instance, "/eth/v1/node/identity")
+        print(f"Peer ID: {identity['data']['peer_id']}")
+
+        chain_id = custom_ethnode.eth_chain_id(network, instance)
+        print(f"Chain ID: {chain_id}")

@@ -248,11 +248,12 @@ func (w *responseCapture) Flush() {
 func extractDatasourceType(path string) string {
 	trimmed := strings.TrimPrefix(path, "/")
 
+	first := trimmed
 	if idx := strings.IndexByte(trimmed, '/'); idx > 0 {
-		trimmed = trimmed[:idx]
+		first = trimmed[:idx]
 	}
 
-	switch trimmed {
+	switch first {
 	case "clickhouse":
 		return "clickhouse"
 	case "prometheus":
@@ -261,6 +262,18 @@ func extractDatasourceType(path string) string {
 		return "loki"
 	case "beacon", "execution":
 		return "ethnode"
+	case "custom":
+		rest := strings.TrimPrefix(trimmed, "custom/")
+		second := rest
+		if idx := strings.IndexByte(rest, '/'); idx > 0 {
+			second = rest[:idx]
+		}
+
+		if second == "beacon" || second == "execution" {
+			return "custom_ethnode"
+		}
+
+		return "unknown"
 	case "datasources":
 		return "datasources"
 	case "embed":

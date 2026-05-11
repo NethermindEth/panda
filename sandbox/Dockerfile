@@ -32,6 +32,7 @@ COPY modules/dora/python/dora.py /opt/ethpandaops-pkg/ethpandaops/dora.py
 COPY modules/loki/python/loki.py /opt/ethpandaops-pkg/ethpandaops/loki.py
 COPY modules/prometheus/python/prometheus.py /opt/ethpandaops-pkg/ethpandaops/prometheus.py
 COPY modules/ethnode/python/ethnode.py /opt/ethpandaops-pkg/ethpandaops/ethnode.py
+COPY modules/ethnode/python/custom_ethnode.py /opt/ethpandaops-pkg/ethpandaops/custom_ethnode.py
 
 RUN uv pip install --system --no-cache /opt/ethpandaops-pkg && rm -rf /opt/ethpandaops-pkg
 
