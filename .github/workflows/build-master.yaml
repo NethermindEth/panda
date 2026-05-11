@@ -6,9 +6,7 @@ on:
 
 jobs:
   meta:
-    runs-on:
-      - self-hosted-ghr
-      - size-m-x64
+    runs-on: ubuntu-latest
     outputs:
       short-sha: ${{ steps.sha.outputs.short }}
     steps:
@@ -17,6 +15,9 @@ jobs:
 
   build:
     needs: meta
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/build-and-push.yaml
     with:
       version: master-${{ needs.meta.outputs.short-sha }}
@@ -24,6 +25,3 @@ jobs:
       cli-tags: master-${{ needs.meta.outputs.short-sha }},master-latest
       proxy-tags: proxy-master-${{ needs.meta.outputs.short-sha }},proxy-master-latest
       sandbox-tags: sandbox-master-${{ needs.meta.outputs.short-sha }},sandbox-master-latest
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
