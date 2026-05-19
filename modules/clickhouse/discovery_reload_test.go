@@ -214,7 +214,7 @@ func (f *fakeSchemaClient) Start(_ context.Context) error           { return nil
 func (f *fakeSchemaClient) Stop() error                             { return nil }
 func (f *fakeSchemaClient) WaitForReady(_ context.Context) error    { return nil }
 func (f *fakeSchemaClient) GetAllTables() map[string]*ClusterTables { return nil }
-func (f *fakeSchemaClient) GetTableAll(_ string) []TableMatch       { return nil }
+func (f *fakeSchemaClient) GetTableExact(_, _ string) []TableMatch  { return nil }
 func (f *fakeSchemaClient) UpdateDatasources(d []SchemaDiscoveryDatasource) {
 	f.lastUpdate = d
 }
