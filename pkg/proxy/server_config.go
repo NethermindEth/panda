@@ -140,30 +140,62 @@ var (
 // ClickHouseClusterConfig holds ClickHouse cluster configuration.
 type ClickHouseClusterConfig struct {
 	BaseDatasourceConfig `yaml:",inline"`
-	Host                 string `yaml:"host"`
-	Port                 int    `yaml:"port"`
-	Database             string `yaml:"database,omitempty"`
-	Username             string `yaml:"username"`
-	Password             string `yaml:"password"`
-	Secure               bool   `yaml:"secure"`
-	SkipVerify           bool   `yaml:"skip_verify,omitempty"`
-	Timeout              int    `yaml:"timeout,omitempty"`
+	Host                 string                           `yaml:"host"`
+	Port                 int                              `yaml:"port"`
+	Database             string                           `yaml:"database,omitempty"`
+	Username             string                           `yaml:"username"`
+	Password             string                           `yaml:"password"`
+	Secure               bool                             `yaml:"secure"`
+	SkipVerify           bool                             `yaml:"skip_verify,omitempty"`
+	Timeout              int                              `yaml:"timeout,omitempty"`
+	Variants             []ClickHouseClusterVariantConfig `yaml:"variants,omitempty"`
+}
+
+// ClickHouseClusterVariantConfig holds one selectable ClickHouse backend.
+type ClickHouseClusterVariantConfig struct {
+	AllowedOrgs []string `yaml:"allowed_orgs,omitempty"`
+	Host        string   `yaml:"host"`
+	Port        int      `yaml:"port"`
+	Database    string   `yaml:"database,omitempty"`
+	Username    string   `yaml:"username"`
+	Password    string   `yaml:"password"`
+	Secure      bool     `yaml:"secure"`
+	SkipVerify  bool     `yaml:"skip_verify,omitempty"`
+	Timeout     int      `yaml:"timeout,omitempty"`
 }
 
 // PrometheusInstanceConfig holds Prometheus instance configuration.
 type PrometheusInstanceConfig struct {
 	BaseDatasourceConfig `yaml:",inline"`
-	URL                  string `yaml:"url"`
-	Username             string `yaml:"username,omitempty"`
-	Password             string `yaml:"password,omitempty"`
+	URL                  string                            `yaml:"url"`
+	Username             string                            `yaml:"username,omitempty"`
+	Password             string                            `yaml:"password,omitempty"`
+	Variants             []PrometheusInstanceVariantConfig `yaml:"variants,omitempty"`
+}
+
+// PrometheusInstanceVariantConfig holds one selectable Prometheus backend.
+type PrometheusInstanceVariantConfig struct {
+	AllowedOrgs []string `yaml:"allowed_orgs,omitempty"`
+	URL         string   `yaml:"url"`
+	Username    string   `yaml:"username,omitempty"`
+	Password    string   `yaml:"password,omitempty"`
 }
 
 // LokiInstanceConfig holds Loki instance configuration.
 type LokiInstanceConfig struct {
 	BaseDatasourceConfig `yaml:",inline"`
-	URL                  string `yaml:"url"`
-	Username             string `yaml:"username,omitempty"`
-	Password             string `yaml:"password,omitempty"`
+	URL                  string                      `yaml:"url"`
+	Username             string                      `yaml:"username,omitempty"`
+	Password             string                      `yaml:"password,omitempty"`
+	Variants             []LokiInstanceVariantConfig `yaml:"variants,omitempty"`
+}
+
+// LokiInstanceVariantConfig holds one selectable Loki backend.
+type LokiInstanceVariantConfig struct {
+	AllowedOrgs []string `yaml:"allowed_orgs,omitempty"`
+	URL         string   `yaml:"url"`
+	Username    string   `yaml:"username,omitempty"`
+	Password    string   `yaml:"password,omitempty"`
 }
 
 // EthNodeInstanceConfig holds Ethereum node API access configuration.
@@ -296,12 +328,18 @@ func (c *ServerConfig) ApplyDefaults() {
 
 	// ClickHouse defaults.
 	for i := range c.ClickHouse {
-		if c.ClickHouse[i].Port == 0 {
-			if c.ClickHouse[i].Secure {
-				c.ClickHouse[i].Port = 8443
-			} else {
-				c.ClickHouse[i].Port = 8123
+		if len(c.ClickHouse[i].Variants) > 0 {
+			for j := range c.ClickHouse[i].Variants {
+				if c.ClickHouse[i].Variants[j].Port == 0 {
+					c.ClickHouse[i].Variants[j].Port = defaultClickHousePort(c.ClickHouse[i].Variants[j].Secure)
+				}
 			}
+
+			continue
+		}
+
+		if c.ClickHouse[i].Port == 0 {
+			c.ClickHouse[i].Port = defaultClickHousePort(c.ClickHouse[i].Secure)
 		}
 	}
 }
@@ -362,6 +400,25 @@ func (c *ServerConfig) Validate() error {
 			return fmt.Errorf("clickhouse[%d].name is required", i)
 		}
 
+		if len(ch.Variants) > 0 {
+			if len(ch.AllowedOrgs) > 0 {
+				return fmt.Errorf("clickhouse[%d] %q cannot set top-level allowed_orgs with variants", i, ch.Name)
+			}
+
+			if ch.Host != "" || ch.Port != 0 || ch.Database != "" ||
+				ch.Username != "" || ch.Password != "" || ch.Secure || ch.SkipVerify || ch.Timeout != 0 {
+				return fmt.Errorf("clickhouse[%d] %q cannot mix top-level backend fields with variants", i, ch.Name)
+			}
+
+			for j, variant := range ch.Variants {
+				if variant.Host == "" {
+					return fmt.Errorf("clickhouse[%d].variants[%d].host is required", i, j)
+				}
+			}
+
+			continue
+		}
+
 		if ch.Host == "" {
 			return fmt.Errorf("clickhouse[%d].host is required", i)
 		}
@@ -371,6 +428,24 @@ func (c *ServerConfig) Validate() error {
 	for i, prom := range c.Prometheus {
 		if prom.Name == "" {
 			return fmt.Errorf("prometheus[%d].name is required", i)
+		}
+
+		if len(prom.Variants) > 0 {
+			if len(prom.AllowedOrgs) > 0 {
+				return fmt.Errorf("prometheus[%d] %q cannot set top-level allowed_orgs with variants", i, prom.Name)
+			}
+
+			if prom.URL != "" || prom.Username != "" || prom.Password != "" {
+				return fmt.Errorf("prometheus[%d] %q cannot mix top-level backend fields with variants", i, prom.Name)
+			}
+
+			for j, variant := range prom.Variants {
+				if variant.URL == "" {
+					return fmt.Errorf("prometheus[%d].variants[%d].url is required", i, j)
+				}
+			}
+
+			continue
 		}
 
 		if prom.URL == "" {
@@ -384,6 +459,24 @@ func (c *ServerConfig) Validate() error {
 			return fmt.Errorf("loki[%d].name is required", i)
 		}
 
+		if len(loki.Variants) > 0 {
+			if len(loki.AllowedOrgs) > 0 {
+				return fmt.Errorf("loki[%d] %q cannot set top-level allowed_orgs with variants", i, loki.Name)
+			}
+
+			if loki.URL != "" || loki.Username != "" || loki.Password != "" {
+				return fmt.Errorf("loki[%d] %q cannot mix top-level backend fields with variants", i, loki.Name)
+			}
+
+			for j, variant := range loki.Variants {
+				if variant.URL == "" {
+					return fmt.Errorf("loki[%d].variants[%d].url is required", i, j)
+				}
+			}
+
+			continue
+		}
+
 		if loki.URL == "" {
 			return fmt.Errorf("loki[%d].url is required", i)
 		}
@@ -395,9 +488,29 @@ func (c *ServerConfig) Validate() error {
 // ToHandlerConfigs converts the server config to handler configs.
 func (c *ServerConfig) ToHandlerConfigs() ([]handlers.ClickHouseConfig, []handlers.PrometheusConfig, []handlers.LokiConfig, *handlers.EthNodeConfig) {
 	// Convert ClickHouse configs.
-	chConfigs := make([]handlers.ClickHouseConfig, len(c.ClickHouse))
-	for i, ch := range c.ClickHouse {
-		chConfigs[i] = handlers.ClickHouseConfig{
+	chConfigs := make([]handlers.ClickHouseConfig, 0, len(c.ClickHouse))
+	for _, ch := range c.ClickHouse {
+		if len(ch.Variants) > 0 {
+			for i, variant := range ch.Variants {
+				chConfigs = append(chConfigs, handlers.ClickHouseConfig{
+					Name:        ch.Name,
+					RouteName:   datasourceVariantRouteName(ch.Name, i),
+					Description: ch.Description,
+					Host:        variant.Host,
+					Port:        variant.Port,
+					Database:    variant.Database,
+					Username:    variant.Username,
+					Password:    variant.Password,
+					Secure:      variant.Secure,
+					SkipVerify:  variant.SkipVerify,
+					Timeout:     variant.Timeout,
+				})
+			}
+
+			continue
+		}
+
+		chConfigs = append(chConfigs, handlers.ClickHouseConfig{
 			Name:        ch.Name,
 			Description: ch.Description,
 			Host:        ch.Host,
@@ -408,31 +521,61 @@ func (c *ServerConfig) ToHandlerConfigs() ([]handlers.ClickHouseConfig, []handle
 			Secure:      ch.Secure,
 			SkipVerify:  ch.SkipVerify,
 			Timeout:     ch.Timeout,
-		}
+		})
 	}
 
 	// Convert Prometheus configs.
-	promConfigs := make([]handlers.PrometheusConfig, len(c.Prometheus))
-	for i, prom := range c.Prometheus {
-		promConfigs[i] = handlers.PrometheusConfig{
+	promConfigs := make([]handlers.PrometheusConfig, 0, len(c.Prometheus))
+	for _, prom := range c.Prometheus {
+		if len(prom.Variants) > 0 {
+			for i, variant := range prom.Variants {
+				promConfigs = append(promConfigs, handlers.PrometheusConfig{
+					Name:        prom.Name,
+					RouteName:   datasourceVariantRouteName(prom.Name, i),
+					Description: prom.Description,
+					URL:         variant.URL,
+					Username:    variant.Username,
+					Password:    variant.Password,
+				})
+			}
+
+			continue
+		}
+
+		promConfigs = append(promConfigs, handlers.PrometheusConfig{
 			Name:        prom.Name,
 			Description: prom.Description,
 			URL:         prom.URL,
 			Username:    prom.Username,
 			Password:    prom.Password,
-		}
+		})
 	}
 
 	// Convert Loki configs.
-	lokiConfigs := make([]handlers.LokiConfig, len(c.Loki))
-	for i, loki := range c.Loki {
-		lokiConfigs[i] = handlers.LokiConfig{
+	lokiConfigs := make([]handlers.LokiConfig, 0, len(c.Loki))
+	for _, loki := range c.Loki {
+		if len(loki.Variants) > 0 {
+			for i, variant := range loki.Variants {
+				lokiConfigs = append(lokiConfigs, handlers.LokiConfig{
+					Name:        loki.Name,
+					RouteName:   datasourceVariantRouteName(loki.Name, i),
+					Description: loki.Description,
+					URL:         variant.URL,
+					Username:    variant.Username,
+					Password:    variant.Password,
+				})
+			}
+
+			continue
+		}
+
+		lokiConfigs = append(lokiConfigs, handlers.LokiConfig{
 			Name:        loki.Name,
 			Description: loki.Description,
 			URL:         loki.URL,
 			Username:    loki.Username,
 			Password:    loki.Password,
-		}
+		})
 	}
 
 	// Convert EthNode config.
@@ -445,6 +588,26 @@ func (c *ServerConfig) ToHandlerConfigs() ([]handlers.ClickHouseConfig, []handle
 	}
 
 	return chConfigs, promConfigs, lokiConfigs, ethNodeConfig
+}
+
+func defaultClickHousePort(secure bool) int {
+	if secure {
+		return 8443
+	}
+
+	return 8123
+}
+
+func datasourceVariantRouteName(name string, index int) string {
+	return fmt.Sprintf("%s\x00variant\x00%d", name, index)
+}
+
+func metadataValue(key, value string) map[string]string {
+	if value == "" {
+		return nil
+	}
+
+	return map[string]string{key: value}
 }
 
 // envVarWithDefaultPattern matches ${VAR_NAME:-default} patterns.

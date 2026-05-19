@@ -16,9 +16,26 @@ import (
 // DatasourceHeader is the HTTP header used to specify which datasource to route to.
 const DatasourceHeader = "X-Datasource"
 
+type datasourceRouteContextKey struct{}
+
+// WithDatasourceRoute stores the selected backend route for the current request.
+func WithDatasourceRoute(ctx context.Context, routeName string) context.Context {
+	return context.WithValue(ctx, datasourceRouteContextKey{}, routeName)
+}
+
+func datasourceRoute(r *http.Request, fallback string) string {
+	routeName, _ := r.Context().Value(datasourceRouteContextKey{}).(string)
+	if routeName == "" {
+		return fallback
+	}
+
+	return routeName
+}
+
 // ClickHouseConfig holds ClickHouse proxy configuration for a single cluster.
 type ClickHouseConfig struct {
 	Name        string
+	RouteName   string
 	Description string
 	Host        string
 	Port        int
@@ -34,6 +51,7 @@ type ClickHouseConfig struct {
 type ClickHouseHandler struct {
 	log      logrus.FieldLogger
 	clusters map[string]*clickhouseCluster
+	names    []string
 }
 
 type clickhouseCluster struct {
@@ -49,7 +67,8 @@ func NewClickHouseHandler(log logrus.FieldLogger, configs []ClickHouseConfig) *C
 	}
 
 	for _, cfg := range configs {
-		h.clusters[cfg.Name] = h.createCluster(cfg)
+		h.names = appendUniqueName(h.names, cfg.Name)
+		h.clusters[handlerRouteName(cfg.Name, cfg.RouteName)] = h.createCluster(cfg)
 	}
 
 	return h
@@ -124,7 +143,7 @@ func (h *ClickHouseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cluster, ok := h.clusters[clusterName]
+	cluster, ok := h.clusters[datasourceRoute(r, clusterName)]
 	if !ok {
 		http.Error(w, fmt.Sprintf("unknown cluster: %s", clusterName), http.StatusNotFound)
 
@@ -157,10 +176,23 @@ func (h *ClickHouseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Clusters returns the list of configured cluster names.
 func (h *ClickHouseHandler) Clusters() []string {
-	names := make([]string, 0, len(h.clusters))
-	for name := range h.clusters {
-		names = append(names, name)
+	return append([]string(nil), h.names...)
+}
+
+func handlerRouteName(name, routeName string) string {
+	if routeName != "" {
+		return routeName
 	}
 
-	return names
+	return name
+}
+
+func appendUniqueName(names []string, name string) []string {
+	for _, existing := range names {
+		if existing == name {
+			return names
+		}
+	}
+
+	return append(names, name)
 }

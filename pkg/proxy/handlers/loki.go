@@ -17,6 +17,7 @@ import (
 // LokiConfig holds Loki proxy configuration for a single instance.
 type LokiConfig struct {
 	Name        string
+	RouteName   string
 	Description string
 	URL         string
 	Username    string
@@ -29,6 +30,7 @@ type LokiConfig struct {
 type LokiHandler struct {
 	log       logrus.FieldLogger
 	instances map[string]*lokiInstance
+	names     []string
 }
 
 type lokiInstance struct {
@@ -44,7 +46,8 @@ func NewLokiHandler(log logrus.FieldLogger, configs []LokiConfig) *LokiHandler {
 	}
 
 	for _, cfg := range configs {
-		h.instances[cfg.Name] = h.createInstance(cfg)
+		h.names = appendUniqueName(h.names, cfg.Name)
+		h.instances[handlerRouteName(cfg.Name, cfg.RouteName)] = h.createInstance(cfg)
 	}
 
 	return h
@@ -106,7 +109,7 @@ func (h *LokiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, ok := h.instances[instanceName]
+	instance, ok := h.instances[datasourceRoute(r, instanceName)]
 	if !ok {
 		http.Error(w, fmt.Sprintf("unknown instance: %s", instanceName), http.StatusNotFound)
 
@@ -145,10 +148,5 @@ func (h *LokiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Instances returns the list of configured instance names.
 func (h *LokiHandler) Instances() []string {
-	names := make([]string, 0, len(h.instances))
-	for name := range h.instances {
-		names = append(names, name)
-	}
-
-	return names
+	return append([]string(nil), h.names...)
 }
