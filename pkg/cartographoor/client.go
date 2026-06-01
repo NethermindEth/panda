@@ -2,15 +2,14 @@ package cartographoor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethpandaops/cartographoor/pkg/client"
 	"github.com/ethpandaops/cartographoor/pkg/discovery"
 	"github.com/sirupsen/logrus"
 )
@@ -58,15 +57,20 @@ type CartographoorClient interface {
 	GetClusters(network discovery.Network) []string
 }
 
+// cartographoorClient adapts the upstream cartographoor client library to panda's
+// network model. Fetching and caching of networks.json is delegated to a
+// client.MemoryProvider; this type layers panda-specific devnet grouping and
+// xatu cluster mapping on top, refreshing its derived state whenever the
+// provider reports new data.
 type cartographoorClient struct {
-	log    logrus.FieldLogger
-	cfg    CartographoorConfig
-	client *http.Client
+	log logrus.FieldLogger
+	cfg CartographoorConfig
 
-	mu          sync.RWMutex
-	networks    map[string]discovery.Network
-	groups      map[string][]string // group name -> network names
-	lastUpdated time.Time
+	provider client.Provider
+
+	mu       sync.RWMutex
+	networks map[string]discovery.Network
+	groups   map[string][]string // group name -> network names
 
 	done chan struct{}
 	wg   sync.WaitGroup
@@ -87,44 +91,67 @@ func NewCartographoorClient(log logrus.FieldLogger, cfg CartographoorConfig) Car
 	}
 
 	return &cartographoorClient{
-		log: log.WithField("component", "cartographoor"),
-		cfg: cfg,
-		client: &http.Client{
-			Timeout: cfg.Timeout,
-		},
+		log:      log.WithField("component", "cartographoor"),
+		cfg:      cfg,
 		networks: make(map[string]discovery.Network),
 		groups:   make(map[string][]string),
 		done:     make(chan struct{}),
 	}
 }
 
-// Start initializes the client and starts background refresh.
+// Start initializes the underlying provider and starts watching for refreshes.
 func (c *cartographoorClient) Start(ctx context.Context) error {
 	c.log.WithField("url", c.cfg.URL).Info("Starting cartographoor client")
 
-	// Initial fetch
-	if err := c.refresh(ctx); err != nil {
+	provider, err := client.NewMemoryProvider(client.Config{
+		SourceURL:       c.cfg.URL,
+		RefreshInterval: c.cfg.CacheTTL,
+		RequestTimeout:  c.cfg.Timeout,
+	}, c.log)
+	if err != nil {
+		return fmt.Errorf("creating provider: %w", err)
+	}
+
+	// Start blocks until the initial fetch completes (or fails).
+	if err := provider.Start(ctx); err != nil {
 		return fmt.Errorf("initial fetch failed: %w", err)
 	}
 
-	// Start background refresh
+	c.provider = provider
+
+	// Build the initial derived state from the freshly fetched data.
+	if err := c.rebuild(ctx); err != nil {
+		return fmt.Errorf("building network cache: %w", err)
+	}
+
+	// Watch for subsequent provider refreshes and rebuild derived state.
 	c.wg.Add(1)
 
-	go c.backgroundRefresh()
+	go c.watch(ctx)
+
+	c.mu.RLock()
+	networkCount, groupCount := len(c.networks), len(c.groups)
+	c.mu.RUnlock()
 
 	c.log.WithFields(logrus.Fields{
-		"network_count": len(c.networks),
-		"group_count":   len(c.groups),
+		"network_count": networkCount,
+		"group_count":   groupCount,
 		"cache_ttl":     c.cfg.CacheTTL,
 	}).Info("Cartographoor client started")
 
 	return nil
 }
 
-// Stop stops the background refresh goroutine.
+// Stop stops the watch goroutine and the underlying provider.
 func (c *cartographoorClient) Stop() error {
 	close(c.done)
 	c.wg.Wait()
+
+	if c.provider != nil {
+		if err := c.provider.Stop(); err != nil {
+			return fmt.Errorf("stopping provider: %w", err)
+		}
+	}
 
 	c.log.Info("Cartographoor client stopped")
 
@@ -221,74 +248,68 @@ func (c *cartographoorClient) GetClusters(network discovery.Network) []string {
 	return []string{"xatu", "xatu-cbt"}
 }
 
-// backgroundRefresh periodically refreshes the network data.
-func (c *cartographoorClient) backgroundRefresh() {
+// watch rebuilds the derived state whenever the provider reports new data.
+func (c *cartographoorClient) watch(ctx context.Context) {
 	defer c.wg.Done()
 
-	ticker := time.NewTicker(c.cfg.CacheTTL)
-	defer ticker.Stop()
+	notify := c.provider.NotifyChannel()
 
 	for {
 		select {
 		case <-c.done:
 			return
-		case <-ticker.C:
-			ctx, cancel := context.WithTimeout(context.Background(), c.cfg.Timeout)
-
-			if err := c.refresh(ctx); err != nil {
+		case <-ctx.Done():
+			return
+		case <-notify:
+			if err := c.rebuild(ctx); err != nil {
 				c.log.WithError(err).Warn("Failed to refresh network data")
-			} else {
-				c.log.WithField("network_count", len(c.networks)).Debug("Refreshed network data")
+
+				continue
 			}
 
-			cancel()
+			c.mu.RLock()
+			count := len(c.networks)
+			c.mu.RUnlock()
+
+			c.log.WithField("network_count", count).Debug("Refreshed network data")
 		}
 	}
 }
 
-// refresh fetches the latest network data from cartographoor.
-func (c *cartographoorClient) refresh(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.URL, nil)
+// rebuild reads networks from the provider and recomputes the local network
+// cache and devnet group index.
+func (c *cartographoorClient) rebuild(ctx context.Context) error {
+	networks, err := c.provider.GetNetworks(ctx)
 	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
+		return fmt.Errorf("fetching networks: %w", err)
 	}
 
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("fetching data: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	groups := buildGroups(networks)
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
+	c.mu.Lock()
+	c.networks = networks
+	c.groups = groups
+	c.mu.Unlock()
 
-	var result discovery.Result
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
+	return nil
+}
 
-	// Build groups map
+// buildGroups indexes networks into devnet groups (group name -> sorted network names)
+// based on the "ethpandaops/{group}-devnets" repository naming convention.
+func buildGroups(networks map[string]discovery.Network) map[string][]string {
 	groups := make(map[string][]string, 16)
 
-	for name, network := range result.Networks {
+	for name, network := range networks {
 		if matches := groupPattern.FindStringSubmatch(network.Repository); len(matches) == 2 {
 			groupName := matches[1]
 			groups[groupName] = append(groups[groupName], name)
 		}
 	}
 
-	// Sort network names within each group
+	// Sort network names within each group for stable output.
 	for _, names := range groups {
 		sort.Strings(names)
 	}
 
-	// Update cache
-	c.mu.Lock()
-	c.networks = result.Networks
-	c.groups = groups
-	c.lastUpdated = time.Now()
-	c.mu.Unlock()
-
-	return nil
+	return groups
 }
