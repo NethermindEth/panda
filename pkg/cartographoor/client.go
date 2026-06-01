@@ -78,6 +78,13 @@ type cartographoorClient struct {
 
 // NewCartographoorClient creates a new cartographoor client.
 func NewCartographoorClient(log logrus.FieldLogger, cfg CartographoorConfig) CartographoorClient {
+	return newClient(log, cfg)
+}
+
+// newClient builds the concrete client with defaults applied. It returns the
+// concrete type (rather than the interface) so tests can inject an
+// already-started provider via startWithProvider.
+func newClient(log logrus.FieldLogger, cfg CartographoorConfig) *cartographoorClient {
 	if cfg.URL == "" {
 		cfg.URL = DefaultCartographoorURL
 	}
@@ -117,6 +124,13 @@ func (c *cartographoorClient) Start(ctx context.Context) error {
 		return fmt.Errorf("initial fetch failed: %w", err)
 	}
 
+	return c.startWithProvider(ctx, provider)
+}
+
+// startWithProvider wires an already-started provider into the client: it builds
+// the initial derived state and launches the watcher that rebuilds whenever the
+// provider reports new data. Separated from Start so tests can inject a provider.
+func (c *cartographoorClient) startWithProvider(ctx context.Context, provider client.Provider) error {
 	c.provider = provider
 
 	// Build the initial derived state from the freshly fetched data.

@@ -87,38 +87,35 @@ func (h *ClickHouseHandler) createCluster(cfg ClickHouseConfig) *clickhouseClust
 	}
 
 	// Create reverse proxy.
-	rp := httputil.NewSingleHostReverseProxy(targetURL)
+	rp := &httputil.ReverseProxy{Transport: newProxyTransport(cfg.SkipVerify)}
 
-	rp.Transport = newProxyTransport(cfg.SkipVerify)
-
-	// Customize the director to add auth and database.
-	originalDirector := rp.Director
-	rp.Director = func(req *http.Request) {
-		originalDirector(req)
+	rp.Rewrite = func(pr *httputil.ProxyRequest) {
+		pr.SetURL(targetURL)
+		pr.SetXForwarded()
 
 		// Remove the sandbox's Authorization header (Bearer token) before adding our own.
-		req.Header.Del("Authorization")
+		pr.Out.Header.Del("Authorization")
 
 		// Add basic auth for ClickHouse.
 		if cfg.Username != "" {
-			req.SetBasicAuth(cfg.Username, cfg.Password)
+			pr.Out.SetBasicAuth(cfg.Username, cfg.Password)
 		}
 
 		// Add default database as query param if not already set.
-		q := req.URL.Query()
+		q := pr.Out.URL.Query()
 		if q.Get("database") == "" && cfg.Database != "" {
 			q.Set("database", cfg.Database)
 		}
 
-		req.URL.RawQuery = q.Encode()
+		pr.Out.URL.RawQuery = q.Encode()
 
-		// Set req.Host to the target host. The default director only sets req.URL.Host,
+		// Set the outbound Host to the target host. SetURL only sets URL.Host,
 		// but Go's http.Client uses req.Host for the Host header when sending requests.
 		// Without this, Cloudflare rejects requests with mismatched Host headers.
-		req.Host = req.URL.Host
+		pr.Out.Host = pr.Out.URL.Host
 
 		// Also delete any existing Host header to avoid conflicts.
-		req.Header.Del("Host")
+		pr.Out.Header.Del("Host")
 	}
 
 	// Error handler.

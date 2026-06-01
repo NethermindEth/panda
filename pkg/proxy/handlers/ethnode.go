@@ -147,26 +147,24 @@ func (h *EthNodeHandler) getOrCreateProxy(host string) *httputil.ReverseProxy {
 		Host:   host,
 	}
 
-	rp := httputil.NewSingleHostReverseProxy(targetURL)
-
-	rp.Transport = newProxyTransport(false)
+	rp := &httputil.ReverseProxy{Transport: newProxyTransport(false)}
 
 	cfg := h.cfg
-	originalDirector := rp.Director
-	rp.Director = func(req *http.Request) {
-		originalDirector(req)
+	rp.Rewrite = func(pr *httputil.ProxyRequest) {
+		pr.SetURL(targetURL)
+		pr.SetXForwarded()
 
 		// Remove the sandbox's Authorization header (Bearer token).
-		req.Header.Del("Authorization")
+		pr.Out.Header.Del("Authorization")
 
 		// Add basic auth credentials.
 		if cfg.Username != "" {
-			req.SetBasicAuth(cfg.Username, cfg.Password)
+			pr.Out.SetBasicAuth(cfg.Username, cfg.Password)
 		}
 
-		// Set req.Host to the target host for correct Host header.
-		req.Host = req.URL.Host
-		req.Header.Del("Host")
+		// Set the outbound Host to the target host for correct Host header.
+		pr.Out.Host = pr.Out.URL.Host
+		pr.Out.Header.Del("Host")
 	}
 
 	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
