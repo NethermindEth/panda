@@ -7,21 +7,22 @@ import (
 	"maps"
 	"sync"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/ethpandaops/panda/pkg/module"
 	"github.com/ethpandaops/panda/pkg/types"
 )
 
 // Compile-time interface checks.
 var (
-	_ module.Module            = (*Module)(nil)
-	_ module.ProxyDiscoverable = (*Module)(nil)
+	_ module.Module                 = (*Module)(nil)
+	_ module.ProxyDiscoverable      = (*Module)(nil)
+	_ module.SandboxEnvProvider     = (*Module)(nil)
+	_ module.DatasourceInfoProvider = (*Module)(nil)
+	_ module.ExamplesProvider       = (*Module)(nil)
+	_ module.PythonAPIDocsProvider  = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for Loki.
 type Module struct {
-	cfg         Config
 	dsMu        sync.RWMutex
 	datasources []types.DatasourceInfo
 }
@@ -29,7 +30,7 @@ type Module struct {
 // New creates a new Loki module.
 func New() *Module { return &Module{} }
 
-func (p *Module) Name() string { return "loki" }
+func (m *Module) Name() string { return "loki" }
 
 // InitFromDiscovery initializes the module from discovered datasources.
 // Safe to call repeatedly: subsequent calls replace the datasource list in
@@ -37,7 +38,7 @@ func (p *Module) Name() string { return "loki" }
 //
 // Always writes the filtered list, including when empty — see the comment on
 // the clickhouse module's InitFromDiscovery for the rationale.
-func (p *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
+func (m *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 	filtered := make([]types.DatasourceInfo, 0, len(datasources))
 
 	for _, ds := range datasources {
@@ -48,9 +49,9 @@ func (p *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 		filtered = append(filtered, ds)
 	}
 
-	p.dsMu.Lock()
-	p.datasources = filtered
-	p.dsMu.Unlock()
+	m.dsMu.Lock()
+	m.datasources = filtered
+	m.dsMu.Unlock()
 
 	if len(filtered) == 0 {
 		return module.ErrNoValidConfig
@@ -59,56 +60,20 @@ func (p *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 	return nil
 }
 
-// Init parses the raw YAML config for this module.
-func (p *Module) Init(rawConfig []byte) error {
-	if err := yaml.Unmarshal(rawConfig, &p.cfg); err != nil {
-		return err
-	}
-
-	// Drop unnamed instances.
-	validInstances := make([]InstanceConfig, 0, len(p.cfg.Instances))
-	for _, inst := range p.cfg.Instances {
-		if inst.Name != "" {
-			validInstances = append(validInstances, inst)
-		}
-	}
-
-	p.cfg.Instances = validInstances
-
-	if len(p.cfg.Instances) == 0 {
-		return module.ErrNoValidConfig
-	}
-
-	// Populate internal datasources from config.
-	datasources := make([]types.DatasourceInfo, 0, len(p.cfg.Instances))
-	for _, inst := range p.cfg.Instances {
-		datasources = append(datasources, types.DatasourceInfo{
-			Type:        "loki",
-			Name:        inst.Name,
-			Description: inst.Description,
-			Metadata: map[string]string{
-				"url": inst.URL,
-			},
-		})
-	}
-
-	p.dsMu.Lock()
-	p.datasources = datasources
-	p.dsMu.Unlock()
-
-	return nil
-}
+// Init is a no-op: the module's datasources come from proxy discovery via
+// InitFromDiscovery.
+func (m *Module) Init(_ []byte) error { return nil }
 
 // ApplyDefaults sets default values before validation.
-func (p *Module) ApplyDefaults() {}
+func (m *Module) ApplyDefaults() {}
 
 // Validate checks that the parsed config is valid.
-func (p *Module) Validate() error {
-	p.dsMu.RLock()
-	defer p.dsMu.RUnlock()
+func (m *Module) Validate() error {
+	m.dsMu.RLock()
+	defer m.dsMu.RUnlock()
 
-	names := make(map[string]struct{}, len(p.datasources))
-	for i, ds := range p.datasources {
+	names := make(map[string]struct{}, len(m.datasources))
+	for i, ds := range m.datasources {
 		if ds.Name == "" {
 			return fmt.Errorf("datasource[%d].name is required", i)
 		}
@@ -124,11 +89,11 @@ func (p *Module) Validate() error {
 }
 
 // SandboxEnv returns environment variables for the sandbox.
-func (p *Module) SandboxEnv() (map[string]string, error) {
-	p.dsMu.RLock()
-	defer p.dsMu.RUnlock()
+func (m *Module) SandboxEnv() (map[string]string, error) {
+	m.dsMu.RLock()
+	defer m.dsMu.RUnlock()
 
-	if len(p.datasources) == 0 {
+	if len(m.datasources) == 0 {
 		return nil, nil
 	}
 
@@ -137,8 +102,8 @@ func (p *Module) SandboxEnv() (map[string]string, error) {
 		Description string `json:"description"`
 	}
 
-	infos := make([]datasourceInfo, 0, len(p.datasources))
-	for _, ds := range p.datasources {
+	infos := make([]datasourceInfo, 0, len(m.datasources))
+	for _, ds := range m.datasources {
 		infos = append(infos, datasourceInfo{
 			Name:        ds.Name,
 			Description: ds.Description,
@@ -156,18 +121,18 @@ func (p *Module) SandboxEnv() (map[string]string, error) {
 }
 
 // DatasourceInfo returns datasource metadata for datasources:// resources.
-func (p *Module) DatasourceInfo() []types.DatasourceInfo {
-	p.dsMu.RLock()
-	defer p.dsMu.RUnlock()
+func (m *Module) DatasourceInfo() []types.DatasourceInfo {
+	m.dsMu.RLock()
+	defer m.dsMu.RUnlock()
 
-	result := make([]types.DatasourceInfo, len(p.datasources))
-	copy(result, p.datasources)
+	result := make([]types.DatasourceInfo, len(m.datasources))
+	copy(result, m.datasources)
 
 	return result
 }
 
 // Examples returns query examples for the Loki module.
-func (p *Module) Examples() map[string]types.ExampleCategory {
+func (m *Module) Examples() map[string]types.ExampleCategory {
 	result := make(map[string]types.ExampleCategory, len(queryExamples))
 	maps.Copy(result, queryExamples)
 
@@ -175,7 +140,7 @@ func (p *Module) Examples() map[string]types.ExampleCategory {
 }
 
 // PythonAPIDocs returns the Loki module documentation.
-func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
+func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	return map[string]types.ModuleDoc{
 		"loki": {
 			Description: "Query Loki for log data",
@@ -186,48 +151,48 @@ func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 					Returns:     "List of dicts with 'name', 'description', 'url' keys",
 				},
 				"query": {
-					Signature:   "loki.query(datasource: str, logql: str, limit: int = 100, start: str = None, end: str = None, direction: str = 'backward') -> dict",
+					Signature:   "loki.query(instance_name: str, logql: str, limit: int = 100, start: str = None, end: str = None, direction: str = 'backward') -> dict",
 					Description: "Execute LogQL range query and return the raw Loki data payload",
 					Parameters: map[string]string{
-						"datasource": "Datasource name from datasources://loki",
-						"logql":      "LogQL query string",
-						"limit":      "Max entries to return (default: 100)",
-						"start":      "Start time (default: now-1h)",
-						"end":        "End time (default: now)",
-						"direction":  "'forward' or 'backward' (default)",
+						"instance_name": "Datasource name from datasources://loki",
+						"logql":         "LogQL query string",
+						"limit":         "Max entries to return (default: 100)",
+						"start":         "Start time (default: now-1h)",
+						"end":           "End time (default: now)",
+						"direction":     "'forward' or 'backward' (default)",
 					},
 					Returns: "Dict with Loki stream/vector data under 'resultType' and 'result'",
 				},
 				"query_instant": {
-					Signature:   "loki.query_instant(datasource: str, logql: str, time: str = None, limit: int = 100, direction: str = 'backward') -> dict",
+					Signature:   "loki.query_instant(instance_name: str, logql: str, time: str = None, limit: int = 100, direction: str = 'backward') -> dict",
 					Description: "Execute instant LogQL query and return the raw Loki data payload",
 					Parameters: map[string]string{
-						"datasource": "Datasource name",
-						"logql":      "LogQL query string",
-						"time":       "Evaluation timestamp (default: now)",
-						"limit":      "Max entries (default: 100)",
-						"direction":  "'forward' or 'backward'",
+						"instance_name": "Datasource name",
+						"logql":         "LogQL query string",
+						"time":          "Evaluation timestamp (default: now)",
+						"limit":         "Max entries (default: 100)",
+						"direction":     "'forward' or 'backward'",
 					},
 					Returns: "Dict with Loki stream/vector data under 'resultType' and 'result'",
 				},
 				"get_labels": {
-					Signature:   "loki.get_labels(datasource: str, start: str = None, end: str = None) -> list[str]",
+					Signature:   "loki.get_labels(instance_name: str, start: str = None, end: str = None) -> list[str]",
 					Description: "Get all label names",
 					Parameters: map[string]string{
-						"datasource": "Datasource name",
-						"start":      "Optional start time",
-						"end":        "Optional end time",
+						"instance_name": "Datasource name",
+						"start":         "Optional start time",
+						"end":           "Optional end time",
 					},
 					Returns: "List of label names",
 				},
 				"get_label_values": {
-					Signature:   "loki.get_label_values(datasource: str, label: str, start: str = None, end: str = None) -> list[str]",
+					Signature:   "loki.get_label_values(instance_name: str, label: str, start: str = None, end: str = None) -> list[str]",
 					Description: "Get all values for a label",
 					Parameters: map[string]string{
-						"datasource": "Datasource name",
-						"label":      "Label name",
-						"start":      "Optional start time",
-						"end":        "Optional end time",
+						"instance_name": "Datasource name",
+						"label":         "Label name",
+						"start":         "Optional start time",
+						"end":           "Optional end time",
 					},
 					Returns: "List of label values",
 				},
@@ -237,7 +202,7 @@ func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 }
 
 // Start performs async initialization.
-func (p *Module) Start(_ context.Context) error { return nil }
+func (m *Module) Start(_ context.Context) error { return nil }
 
 // Stop cleans up resources.
-func (p *Module) Stop(_ context.Context) error { return nil }
+func (m *Module) Stop(_ context.Context) error { return nil }

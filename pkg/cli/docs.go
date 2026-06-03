@@ -25,12 +25,33 @@ Examples:
   panda docs                  # List all modules
   panda docs clickhouse       # Show clickhouse module docs
   panda docs --json           # Output as JSON`,
-	RunE:      runDocs,
-	ValidArgs: []string{"block_archive", "clickhouse", "prometheus", "loki", "dora", "storage", "ethnode"},
+	RunE: runDocs,
 }
 
 func init() {
 	rootCmd.AddCommand(docsCmd)
+	docsCmd.ValidArgsFunction = completeDocsModules
+}
+
+// completeDocsModules completes the docs positional arg with the live module
+// set provided by the server, keeping completion in sync with what 'panda docs'
+// actually accepts.
+func completeDocsModules(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	allDocs, err := getAllPythonAPIDocs(context.Background())
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	names := make([]string, 0, len(allDocs))
+	for name := range allDocs {
+		names = append(names, name)
+	}
+
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 func runDocs(_ *cobra.Command, args []string) error {

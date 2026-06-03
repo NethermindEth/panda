@@ -231,12 +231,12 @@ type BuildTriggerResponse struct {
 	RunURL string `json:"run_url,omitempty"`
 }
 
-// BuildStatusRequest is the request for GET /api/v1/build/status.
+// BuildStatusRequest is the request for POST /api/v1/build/status.
 type BuildStatusRequest struct {
 	RunID int64 `json:"run_id"`
 }
 
-// BuildStatusResponse is the response from GET /api/v1/build/status.
+// BuildStatusResponse is the response from POST /api/v1/build/status.
 type BuildStatusResponse struct {
 	RunID      int64  `json:"run_id"`
 	Status     string `json:"status"`

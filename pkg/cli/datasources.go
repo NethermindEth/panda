@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/spf13/cobra"
 )
@@ -49,14 +50,26 @@ func runDatasources(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	rows := make([][]string, 0, len(response.Datasources))
+
 	for _, info := range response.Datasources {
 		desc := info.Description
 		if desc == "" {
 			desc = info.Name
 		}
 
-		fmt.Printf("  %-12s  %-20s  %s\n", info.Type, info.Name, desc)
+		rows = append(rows, []string{info.Type, info.Name, desc})
 	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i][0] != rows[j][0] {
+			return rows[i][0] < rows[j][0]
+		}
+
+		return rows[i][1] < rows[j][1]
+	})
+
+	printTable([]string{"TYPE", "NAME", "DESCRIPTION"}, rows)
 
 	return nil
 }

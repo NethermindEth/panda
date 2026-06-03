@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,27 +59,27 @@ func (s *service) handleBlockArchiveOperation(operationID string, w http.Respons
 }
 
 func (s *service) handleBlockArchiveListNetworks(w http.ResponseWriter, r *http.Request) {
-	baseURL, status, err := s.blockArchiveBaseURL()
-	if err != nil {
-		http.Error(w, err.Error(), status)
-		return
-	}
-
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	activeFilter, err := optionalBoolArg(req.Args, "active")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	baseURL, status, err := s.blockArchiveBaseURL()
+	if err != nil {
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	networks, err := s.blockArchiveNetworks(r.Context(), baseURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeAPIError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 
@@ -103,7 +102,7 @@ func (s *service) handleBlockArchiveListNetworks(w http.ResponseWriter, r *http.
 func (s *service) handleBlockArchiveBaseURL(w http.ResponseWriter) {
 	baseURL, status, err := s.blockArchiveBaseURL()
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -116,20 +115,20 @@ func (s *service) handleBlockArchiveBaseURL(w http.ResponseWriter) {
 func (s *service) handleBlockArchiveDownloadSSZ(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, network, slot, blockRoot, status, err := s.blockArchiveParams(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	path := fmt.Sprintf("/%s/%d/%s.ssz", network, slot, blockRoot)
 	body, _, status, err := s.blockArchiveGetRaw(r.Context(), baseURL, path, blockArchiveMaxBlockSize)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -139,20 +138,20 @@ func (s *service) handleBlockArchiveDownloadSSZ(w http.ResponseWriter, r *http.R
 func (s *service) handleBlockArchiveBlockJSON(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, network, slot, blockRoot, status, err := s.blockArchiveParams(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	path := fmt.Sprintf("/%s/%d/%s.json", network, slot, blockRoot)
 	body, _, status, err := s.blockArchiveGetRaw(r.Context(), baseURL, path, blockArchiveMaxBlockSize)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -162,13 +161,13 @@ func (s *service) handleBlockArchiveBlockJSON(w http.ResponseWriter, r *http.Req
 func (s *service) handleBlockArchiveLink(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, network, slot, blockRoot, status, err := s.blockArchiveParams(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -195,7 +194,7 @@ func (s *service) blockArchiveBaseURL() (string, int, error) {
 	}
 
 	mod, ok := ext.(*blockarchive.Module)
-	if !ok || !mod.Enabled() {
+	if !ok {
 		return "", http.StatusServiceUnavailable, errors.New("block archive is not enabled")
 	}
 
@@ -252,6 +251,9 @@ func (s *service) blockArchiveNetworks(ctx context.Context, baseURL string) ([]b
 	body, _, _, err := s.blockArchiveGetRaw(ctx, baseURL, "/api/v1/networks", blockArchiveMaxMetaSize)
 	if err != nil {
 		if cache.networks != nil {
+			s.log.WithError(err).WithField("fetched_at", cache.fetchedAt).
+				Warn("Block archive networks fetch failed; serving stale cached list")
+
 			return append([]blockArchiveNetwork(nil), cache.networks...), nil
 		}
 
@@ -319,7 +321,7 @@ func (s *service) blockArchiveCache() *blockArchiveNetworksCache {
 }
 
 func requiredSlotArg(args map[string]any, key string) (int64, error) {
-	parsed, err := parseSlotArg(args[key], key)
+	parsed, err := parseInt64Arg(args[key], key)
 	if err != nil {
 		return 0, err
 	}
@@ -329,61 +331,6 @@ func requiredSlotArg(args map[string]any, key string) (int64, error) {
 	}
 
 	return parsed, nil
-}
-
-func parseSlotArg(raw any, key string) (int64, error) {
-	switch value := raw.(type) {
-	case float64:
-		if value != float64(int64(value)) {
-			return 0, fmt.Errorf("%s must be an integer", key)
-		}
-
-		return int64(value), nil
-	case int:
-		return int64(value), nil
-	case int64:
-		return value, nil
-	case json.Number:
-		parsed, err := value.Int64()
-		if err != nil {
-			return 0, fmt.Errorf("%s must be an integer: %w", key, err)
-		}
-
-		return parsed, nil
-	case string:
-		parsed, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("%s must be an integer: %w", key, err)
-		}
-
-		return parsed, nil
-	default:
-		return 0, fmt.Errorf("%s is required", key)
-	}
-}
-
-func optionalBoolArg(args map[string]any, key string) (*bool, error) {
-	raw, ok := args[key]
-	if !ok || raw == nil {
-		return nil, nil
-	}
-
-	switch v := raw.(type) {
-	case bool:
-		return &v, nil
-	case string:
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "true", "1", "yes":
-			t := true
-			return &t, nil
-		case "false", "0", "no":
-			f := false
-			return &f, nil
-		}
-		return nil, fmt.Errorf("%s must be a boolean", key)
-	default:
-		return nil, fmt.Errorf("%s must be a boolean", key)
-	}
 }
 
 func isSafeNetworkName(name string) bool {

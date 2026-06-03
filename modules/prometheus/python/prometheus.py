@@ -8,8 +8,9 @@ from ethpandaops import _runtime
 
 
 def list_datasources() -> list[dict[str, Any]]:
-    data = _runtime.invoke_data("prometheus.list_datasources")
-    return data.get("datasources", [])
+    data = _runtime.invoke_data("prometheus.list_datasources") or {}
+    datasources = data.get("datasources", [])
+    return datasources if isinstance(datasources, list) else []
 
 
 def query(

@@ -47,7 +47,7 @@ func (s *service) handleCBTOperation(operationID string, w http.ResponseWriter, 
 func (s *service) handleCBTListNetworks(w http.ResponseWriter) {
 	networks, err := s.cbtNetworks()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		writeAPIError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 
@@ -78,13 +78,13 @@ func (s *service) handleCBTPassthrough(
 ) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.cbtBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -97,7 +97,7 @@ func (s *service) handleCBTPassthrough(
 
 	body, contentType, status, err := s.cbtAPIGetRaw(r.Context(), baseURL, path, params)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -112,25 +112,25 @@ func (s *service) handleCBTIDPassthrough(
 ) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.cbtBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	id, err := requiredStringArg(req.Args, "id")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	body, contentType, status, err := s.cbtAPIGetRaw(r.Context(), baseURL, fmt.Sprintf(pathTemplate, id), nil)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -146,13 +146,13 @@ func (s *service) handleCBTOptionalIDPassthrough(
 ) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.cbtBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -167,7 +167,7 @@ func (s *service) handleCBTOptionalIDPassthrough(
 
 	body, contentType, status, err := s.cbtAPIGetRaw(r.Context(), baseURL, path, params)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -177,19 +177,19 @@ func (s *service) handleCBTOptionalIDPassthrough(
 func (s *service) handleCBTLinkModel(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.cbtBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	id, err := requiredStringArg(req.Args, "id")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -216,6 +216,8 @@ func (s *service) cbtNetworks() (map[string]string, error) {
 		return nil, fmt.Errorf("cbt is unavailable")
 	}
 
+	// Cartographoor discovery does not expose a CBT service URL, so the per-network
+	// host is derived from the standard ethpandaops.io naming convention.
 	networks := make(map[string]string)
 	for name := range s.cartographoorClient.GetActiveNetworks() {
 		networks[name] = fmt.Sprintf("https://cbt.%s.ethpandaops.io", name)

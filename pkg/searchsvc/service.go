@@ -462,6 +462,11 @@ func (s *Service) SearchEIPs(
 }
 
 // SearchSpecs searches consensus specs with optional fork filter.
+//
+// It returns two independently-ranked result sets in one response: Specs are
+// semantic matches gated by MinSpecsScore, while Constants are lexical
+// name matches (exact/prefix/substring) and are not score-gated. TotalMatches
+// is the combined count of both.
 func (s *Service) SearchSpecs(
 	query, forkFilter string,
 	limit int,

@@ -255,6 +255,10 @@ func (d *configDisplay) showEditModal(p *configParam, onSave func()) {
 		}
 	}
 
+	errorView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetText("")
+
 	form := tview.NewForm()
 	form.AddInputField("Value", p.Value, 20, accept, nil)
 	form.AddButton("Save", func() {
@@ -266,6 +270,7 @@ func (d *configDisplay) showEditModal(p *configParam, onSave func()) {
 		value := item.GetText()
 
 		if msg := validateParamValue(p.Type, value); msg != "" {
+			errorView.SetText("[red]" + msg)
 			d.app.SetFocus(item)
 
 			return
@@ -290,6 +295,7 @@ func (d *configDisplay) showEditModal(p *configParam, onSave func()) {
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
 			AddItem(form, 5, 0, true).
+			AddItem(errorView, 1, 0, false).
 			AddItem(nil, 0, 1, false),
 			40, 0, true).
 		AddItem(nil, 0, 1, false)

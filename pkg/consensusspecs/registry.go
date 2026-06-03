@@ -27,12 +27,8 @@ type cacheData struct {
 
 // Registry manages a collection of parsed consensus specs with disk caching.
 type Registry struct {
-	log       logrus.FieldLogger
-	cfg       config.ConsensusSpecsConfig
-	cacheDir  string
 	specs     []types.ConsensusSpec
 	constants []types.SpecConstant
-	cache     *cacheData
 	mu        sync.RWMutex
 }
 
@@ -66,7 +62,7 @@ func NewRegistry(
 		log.WithError(err).
 			Warn("Failed to resolve consensus-specs ref — trying cache")
 
-		return loadFromCache(log, cfg, cacheDir)
+		return loadFromCache(log, cacheDir)
 	}
 
 	log.WithField("ref", ref).Info("Resolved consensus-specs ref")
@@ -76,7 +72,7 @@ func NewRegistry(
 		log.WithError(err).
 			Warn("Failed to check latest commit — trying cache")
 
-		return loadFromCache(log, cfg, cacheDir)
+		return loadFromCache(log, cacheDir)
 	}
 
 	cached, cacheErr := readCache(cacheDir)
@@ -84,7 +80,7 @@ func NewRegistry(
 		log.WithField("commit", latestSHA[:8]).
 			Info("Consensus specs cache is current")
 
-		return buildRegistry(log, cfg, cacheDir, cached), nil
+		return buildRegistry(cached), nil
 	}
 
 	log.WithFields(logrus.Fields{
@@ -97,7 +93,7 @@ func NewRegistry(
 		log.WithError(err).
 			Warn("Failed to fetch consensus specs — trying cache")
 
-		return loadFromCache(log, cfg, cacheDir)
+		return loadFromCache(log, cacheDir)
 	}
 
 	sortSpecs(result.Specs)
@@ -120,7 +116,7 @@ func NewRegistry(
 		"constant_count": len(result.Constants),
 	}).Info("Consensus specs registry initialized")
 
-	return buildRegistry(log, cfg, cacheDir, newCache), nil
+	return buildRegistry(newCache), nil
 }
 
 // AllSpecs returns a copy of all specs.
@@ -181,26 +177,6 @@ func (r *Registry) Forks() []string {
 	return out
 }
 
-// Topics returns sorted unique topic names across all specs.
-func (r *Registry) Topics() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	seen := make(map[string]struct{}, 16)
-	for _, s := range r.specs {
-		seen[s.Topic] = struct{}{}
-	}
-
-	out := make([]string, 0, len(seen))
-	for v := range seen {
-		out = append(out, v)
-	}
-
-	sort.Strings(out)
-
-	return out
-}
-
 // GetConstant finds a constant by name, optionally filtered to a specific fork.
 // When fork is empty, returns the constant from the latest fork that defines it.
 func (r *Registry) GetConstant(name string, fork string) (types.SpecConstant, bool) {
@@ -244,55 +220,7 @@ func (r *Registry) GetSpec(fork, topic string) (types.ConsensusSpec, bool) {
 	return types.ConsensusSpec{}, false
 }
 
-// Refresh re-fetches consensus specs from GitHub.
-func (r *Registry) Refresh(ctx context.Context) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	f := newFetcher(r.cfg)
-
-	ref, err := f.resolveRef(ctx)
-	if err != nil {
-		return fmt.Errorf("resolving ref: %w", err)
-	}
-
-	latestSHA, err := f.latestCommitSHA(ctx, ref)
-	if err != nil {
-		return fmt.Errorf("checking latest commit: %w", err)
-	}
-
-	if r.cache != nil && r.cache.CommitSHA == latestSHA {
-		return nil
-	}
-
-	result, err := f.fetchAll(ctx, ref)
-	if err != nil {
-		return fmt.Errorf("fetching consensus specs: %w", err)
-	}
-
-	sortSpecs(result.Specs)
-	sortConstants(result.Constants)
-
-	r.cache = &cacheData{
-		CommitSHA: latestSHA,
-		Ref:       ref,
-		FetchedAt: time.Now(),
-		Specs:     result.Specs,
-		Constants: result.Constants,
-	}
-
-	r.specs = result.Specs
-	r.constants = result.Constants
-
-	return writeCache(r.cacheDir, r.cache)
-}
-
-func buildRegistry(
-	log logrus.FieldLogger,
-	cfg config.ConsensusSpecsConfig,
-	cacheDir string,
-	cache *cacheData,
-) *Registry {
+func buildRegistry(cache *cacheData) *Registry {
 	specs := make([]types.ConsensusSpec, len(cache.Specs))
 	copy(specs, cache.Specs)
 
@@ -300,18 +228,13 @@ func buildRegistry(
 	copy(constants, cache.Constants)
 
 	return &Registry{
-		log:       log,
-		cfg:       cfg,
-		cacheDir:  cacheDir,
 		specs:     specs,
 		constants: constants,
-		cache:     cache,
 	}
 }
 
 func loadFromCache(
 	log logrus.FieldLogger,
-	cfg config.ConsensusSpecsConfig,
 	cacheDir string,
 ) (*Registry, error) {
 	cached, err := readCache(cacheDir)
@@ -324,7 +247,7 @@ func loadFromCache(
 		"constant_count": len(cached.Constants),
 	}).Info("Loaded consensus specs from cache")
 
-	return buildRegistry(log, cfg, cacheDir, cached), nil
+	return buildRegistry(cached), nil
 }
 
 func cachePath(cacheDir string) string {

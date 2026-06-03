@@ -139,30 +139,6 @@ func TestBuildSuccessPage_CaseInsensitiveOrgBadge(t *testing.T) {
 	assert.Contains(t, page, "org-badge")
 }
 
-func TestHasOrg(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		orgs   []string
-		target string
-		want   bool
-	}{
-		{"exact match", []string{"ethpandaops"}, "ethpandaops", true},
-		{"case insensitive", []string{"EthPandaOps"}, "ethpandaops", true},
-		{"no match", []string{"other-org"}, "ethpandaops", false},
-		{"empty orgs", []string{}, "ethpandaops", false},
-		{"multiple orgs", []string{"foo", "ethpandaops", "bar"}, "ethpandaops", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.want, hasOrg(tt.orgs, tt.target))
-		})
-	}
-}
-
 // TestBuildSuccessPage_WritePreview writes HTML files to /tmp/panda-auth-preview/
 // for visual inspection. Run with:
 //

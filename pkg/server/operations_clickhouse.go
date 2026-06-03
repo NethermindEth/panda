@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethpandaops/panda/pkg/operations"
+	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 )
 
 func (s *service) handleClickHouseOperation(operationID string, w http.ResponseWriter, r *http.Request) bool {
@@ -41,19 +42,19 @@ func (s *service) handleClickHouseListDatasources(w http.ResponseWriter) {
 func (s *service) handleClickHouseQuery(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	clusterName, err := requiredStringArg(req.Args, "cluster")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	sql, err := requiredStringArg(req.Args, "sql")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -70,17 +71,17 @@ func (s *service) handleClickHouseQuery(w http.ResponseWriter, r *http.Request) 
 		"/clickhouse/?"+params.Encode(),
 		strings.NewReader(sql),
 		http.Header{
-			proxyDatasourceHeader: []string{clusterName},
-			"Content-Type":        []string{"text/plain"},
+			handlers.DatasourceHeader: []string{clusterName},
+			"Content-Type":            []string{"text/plain"},
 		},
 	)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	if status < 200 || status >= 300 {
-		http.Error(w, strings.TrimSpace(string(body)), status)
+		writeAPIError(w, status, strings.TrimSpace(string(body)))
 		return
 	}
 

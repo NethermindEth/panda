@@ -11,7 +11,8 @@ type Cache interface {
 	// Set stores a value by key.
 	Set(ctx context.Context, key string, value []byte) error
 
-	// GetMulti retrieves multiple values by keys. Returns a map of found key-value pairs.
+	// GetMulti retrieves multiple values by keys. Returns a non-nil map of
+	// found key-value pairs, empty when nothing was found.
 	GetMulti(ctx context.Context, keys []string) (map[string][]byte, error)
 
 	// SetMulti stores multiple key-value pairs.

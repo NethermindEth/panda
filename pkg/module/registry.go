@@ -24,8 +24,8 @@ type Registry struct {
 func NewRegistry(log logrus.FieldLogger) *Registry {
 	return &Registry{
 		log:         log.WithField("component", "module_registry"),
-		all:         make(map[string]Module, 4),
-		initialized: make([]Module, 0, 4),
+		all:         make(map[string]Module, 8),
+		initialized: make([]Module, 0, 8),
 	}
 }
 

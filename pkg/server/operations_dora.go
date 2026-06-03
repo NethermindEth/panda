@@ -15,6 +15,10 @@ import (
 	"github.com/ethpandaops/panda/pkg/operations"
 )
 
+// slotsPerEpoch is the mainnet SLOTS_PER_EPOCH. Networks with a different value
+// will report an inaccurate derived slot.
+const slotsPerEpoch = 32
+
 func (s *service) handleDoraOperation(operationID string, w http.ResponseWriter, r *http.Request) bool {
 	switch operationID {
 	case "dora.list_networks":
@@ -51,7 +55,7 @@ func (s *service) handleDoraOperation(operationID string, w http.ResponseWriter,
 func (s *service) handleDoraListNetworks(w http.ResponseWriter) {
 	networks, err := s.doraNetworks()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		writeAPIError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 
@@ -76,13 +80,13 @@ func (s *service) handleDoraListNetworks(w http.ResponseWriter) {
 func (s *service) handleDoraBaseURL(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.doraBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -95,21 +99,23 @@ func (s *service) handleDoraBaseURL(w http.ResponseWriter, r *http.Request) {
 func (s *service) handleDoraNetworkOverview(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.doraBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
+	// Prefer the head epoch, falling back to the latest finalized epoch when
+	// head is unavailable; only the fallback's outcome is surfaced to the caller.
 	data, _, err := s.doraAPIGet(r.Context(), baseURL, "/api/v1/epoch/head", nil)
 	if err != nil {
 		data, status, err = s.doraAPIGet(r.Context(), baseURL, "/api/v1/epoch/latest", nil)
 		if err != nil {
-			http.Error(w, err.Error(), status)
+			writeAPIError(w, status, err.Error())
 			return
 		}
 	}
@@ -138,13 +144,13 @@ func (s *service) handleDoraNetworkOverview(w http.ResponseWriter, r *http.Reque
 func (s *service) handleDoraValidators(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.doraBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -155,7 +161,7 @@ func (s *service) handleDoraValidators(w http.ResponseWriter, r *http.Request) {
 
 	body, contentType, status, err := s.doraAPIGetRaw(r.Context(), baseURL, "/api/v1/validators", params)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -169,25 +175,25 @@ func (s *service) handleDoraDataGetPassthrough(
 ) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.doraBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	identifier, err := requiredStringArg(req.Args, argName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	body, contentType, status, err := s.doraAPIGetRaw(r.Context(), baseURL, fmt.Sprintf(pathTemplate, identifier), nil)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -197,13 +203,13 @@ func (s *service) handleDoraDataGetPassthrough(
 func (s *service) handleDoraLink(w http.ResponseWriter, r *http.Request, pathTemplate string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	baseURL, status, err := s.doraBaseURL(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -215,7 +221,7 @@ func (s *service) handleDoraLink(w http.ResponseWriter, r *http.Request, pathTem
 		}
 	}
 	if identifier == "" {
-		http.Error(w, "identifier is required", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "identifier is required")
 		return
 	}
 
@@ -327,14 +333,14 @@ func (s *service) doraAPIGetRaw(
 func multiplyEpoch(value any) any {
 	switch epoch := value.(type) {
 	case float64:
-		return epoch * 32
+		return epoch * slotsPerEpoch
 	case json.Number:
 		if parsed, err := epoch.Int64(); err == nil {
-			return parsed * 32
+			return parsed * slotsPerEpoch
 		}
 	case string:
 		if parsed, err := strconv.ParseInt(epoch, 10, 64); err == nil {
-			return parsed * 32
+			return parsed * slotsPerEpoch
 		}
 	}
 

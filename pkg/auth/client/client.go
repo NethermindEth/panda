@@ -247,8 +247,8 @@ func (c *client) Refresh(ctx context.Context, refreshToken string) (*Tokens, err
 	refreshTokenIssuedAt := time.Now()
 
 	if resolvedRefreshToken == "" {
-		// Provider did not rotate the refresh token; keep the old one.
-		// The caller will preserve the original RefreshTokenIssuedAt.
+		// Provider did not rotate the refresh token; keep the old one. A zero
+		// issued-at signals the refresh token was reused rather than reissued.
 		resolvedRefreshToken = refreshToken
 		refreshTokenIssuedAt = time.Time{}
 	}

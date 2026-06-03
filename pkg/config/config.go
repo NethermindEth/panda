@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	defaultServerPort                   = 2480
 	defaultProxyName                    = "primary"
 	defaultProxyURL                     = "http://localhost:18081"
 	defaultLocalProxyClickHouseName     = "local-kurtosis"
@@ -308,7 +309,7 @@ func applyDefaults(cfg *Config) {
 	}
 
 	if cfg.Server.Port == 0 {
-		cfg.Server.Port = 2480
+		cfg.Server.Port = defaultServerPort
 	}
 
 	if cfg.Sandbox.Backend == "" {

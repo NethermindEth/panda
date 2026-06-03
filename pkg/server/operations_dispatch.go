@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-)
 
-const proxyDatasourceHeader = "X-Datasource"
+	"github.com/ethpandaops/panda/pkg/proxy/handlers"
+)
 
 func (s *service) dispatchOperation(operationID string, w http.ResponseWriter, r *http.Request) bool {
 	for _, handler := range []func(string, http.ResponseWriter, *http.Request) bool{
@@ -47,15 +47,15 @@ func (s *service) proxyPassthroughGet(
 		http.MethodGet,
 		requestPath,
 		nil,
-		http.Header{proxyDatasourceHeader: []string{datasource}},
+		http.Header{handlers.DatasourceHeader: []string{datasource}},
 	)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	if status < 200 || status >= 300 {
-		http.Error(w, strings.TrimSpace(string(body)), status)
+		writeAPIError(w, status, strings.TrimSpace(string(body)))
 		return
 	}
 

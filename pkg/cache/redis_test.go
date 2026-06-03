@@ -104,10 +104,11 @@ func TestRedisCache_GetMulti_SetMulti(t *testing.T) {
 	assert.Equal(t, []byte("1"), result["a"])
 	assert.Equal(t, []byte("3"), result["c"])
 
-	// Empty key slice returns nil.
+	// Empty key slice returns a non-nil empty map.
 	result, err = rc.GetMulti(ctx, []string{})
 	require.NoError(t, err)
-	assert.Nil(t, result)
+	assert.NotNil(t, result)
+	assert.Empty(t, result)
 }
 
 func TestRedisCache_ConcurrentAccess(t *testing.T) {

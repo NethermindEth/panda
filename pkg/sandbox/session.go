@@ -51,8 +51,9 @@ type SessionManager struct {
 	activeExecs map[string]int
 	mu          sync.RWMutex
 
-	done chan struct{}
-	wg   sync.WaitGroup
+	done     chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
 
 	// containerLister queries Docker for a session container by ID.
 	containerLister ContainerLister
@@ -110,7 +111,9 @@ func (m *SessionManager) Stop(ctx context.Context) error {
 
 	m.log.Info("Stopping session manager")
 
-	close(m.done)
+	m.stopOnce.Do(func() {
+		close(m.done)
+	})
 	m.wg.Wait()
 
 	// Query all session containers and clean them up.
@@ -154,6 +157,16 @@ func (m *SessionManager) RecordAccess(sessionID string) {
 	m.lastUsed[sessionID] = time.Now()
 }
 
+// removeSession drops a session's in-memory TTL state.
+// The caller is responsible for removing the underlying container.
+func (m *SessionManager) removeSession(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.lastUsed, sessionID)
+	delete(m.activeExecs, sessionID)
+}
+
 // markExecuting increments the active execution count for a session.
 // Sessions with active executions are protected from TTL-based purging.
 func (m *SessionManager) markExecuting(sessionID string) {
@@ -175,7 +188,9 @@ func (m *SessionManager) unmarkExecuting(sessionID string) {
 		m.activeExecs[sessionID]--
 	}
 
-	m.lastUsed[sessionID] = time.Now()
+	if _, ok := m.lastUsed[sessionID]; ok {
+		m.lastUsed[sessionID] = time.Now()
+	}
 }
 
 // ActiveSessionCount returns the count of active sessions by querying Docker.

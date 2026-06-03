@@ -152,16 +152,19 @@ func (a *App) Build(ctx context.Context) error {
 	return nil
 }
 
-// Stop cleans up all started components in reverse order.
+// Stop cleans up all started components in reverse order, joining any
+// component shutdown errors.
 func (a *App) Stop(ctx context.Context) error {
-	a.stop(ctx)
-
-	return nil
+	return a.stop(ctx)
 }
 
-func (a *App) stop(ctx context.Context) {
+func (a *App) stop(ctx context.Context) error {
+	var errs []error
+
 	if a.Cartographoor != nil {
-		_ = a.Cartographoor.Stop()
+		if err := a.Cartographoor.Stop(); err != nil {
+			errs = append(errs, fmt.Errorf("stopping cartographoor client: %w", err))
+		}
 	}
 
 	if a.ModuleRegistry != nil {
@@ -169,7 +172,9 @@ func (a *App) stop(ctx context.Context) {
 	}
 
 	if a.ProxyClient != nil {
-		_ = a.ProxyClient.Stop(ctx)
+		if err := a.ProxyClient.Stop(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("stopping proxy client: %w", err))
+		}
 	}
 
 	if a.LocalProxy != nil {
@@ -177,8 +182,12 @@ func (a *App) stop(ctx context.Context) {
 	}
 
 	if a.Sandbox != nil {
-		_ = a.Sandbox.Stop(ctx)
+		if err := a.Sandbox.Stop(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("stopping sandbox: %w", err))
+		}
 	}
+
+	return errors.Join(errs...)
 }
 
 // registerModules creates a module registry and registers all compiled-in

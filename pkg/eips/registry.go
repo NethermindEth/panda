@@ -23,11 +23,8 @@ type cacheData struct {
 
 // Registry manages a collection of parsed EIPs with disk caching.
 type Registry struct {
-	log      logrus.FieldLogger
-	cacheDir string
-	eips     []types.EIP
-	cache    *cacheData
-	mu       sync.RWMutex
+	eips []types.EIP
+	mu   sync.RWMutex
 }
 
 // NewRegistry creates an EIP registry, fetching from GitHub if the
@@ -67,7 +64,7 @@ func NewRegistry(
 		log.WithField("commit", latestSHA[:8]).
 			Info("EIP cache is current")
 
-		return registryFromCache(log, cacheDir, cached)
+		return buildRegistry(cached), nil
 	}
 
 	log.WithField("commit", latestSHA[:8]).
@@ -98,7 +95,7 @@ func NewRegistry(
 	log.WithField("eip_count", len(eipList)).
 		Info("EIP registry initialized")
 
-	return buildRegistry(log, cacheDir, newCache), nil
+	return buildRegistry(newCache), nil
 }
 
 // All returns a copy of all EIPs.
@@ -135,42 +132,6 @@ func (r *Registry) Types() []string {
 	return r.uniqueField(func(e types.EIP) string { return e.Type })
 }
 
-// Refresh re-fetches EIPs from GitHub.
-func (r *Registry) Refresh(ctx context.Context) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	f := newFetcher()
-
-	latestSHA, err := f.latestCommitSHA(ctx)
-	if err != nil {
-		return fmt.Errorf("checking latest commit: %w", err)
-	}
-
-	if r.cache != nil && r.cache.CommitSHA == latestSHA {
-		return nil
-	}
-
-	eipList, err := f.fetchAll(ctx)
-	if err != nil {
-		return fmt.Errorf("fetching EIPs: %w", err)
-	}
-
-	sort.Slice(eipList, func(i, j int) bool {
-		return eipList[i].Number < eipList[j].Number
-	})
-
-	r.cache = &cacheData{
-		CommitSHA: latestSHA,
-		FetchedAt: time.Now(),
-		EIPs:      eipList,
-	}
-
-	r.eips = eipList
-
-	return writeCache(r.cacheDir, r.cache)
-}
-
 func (r *Registry) uniqueField(
 	extract func(types.EIP) string,
 ) []string {
@@ -195,28 +156,13 @@ func (r *Registry) uniqueField(
 	return out
 }
 
-func buildRegistry(
-	log logrus.FieldLogger,
-	cacheDir string,
-	cache *cacheData,
-) *Registry {
+func buildRegistry(cache *cacheData) *Registry {
 	eips := make([]types.EIP, len(cache.EIPs))
 	copy(eips, cache.EIPs)
 
 	return &Registry{
-		log:      log,
-		cacheDir: cacheDir,
-		eips:     eips,
-		cache:    cache,
+		eips: eips,
 	}
-}
-
-func registryFromCache(
-	log logrus.FieldLogger,
-	cacheDir string,
-	cache *cacheData,
-) (*Registry, error) {
-	return buildRegistry(log, cacheDir, cache), nil
 }
 
 func loadFromCache(
@@ -231,7 +177,7 @@ func loadFromCache(
 	log.WithField("eip_count", len(cached.EIPs)).
 		Info("Loaded EIPs from cache")
 
-	return buildRegistry(log, cacheDir, cached), nil
+	return buildRegistry(cached), nil
 }
 
 func cachePath(cacheDir string) string {

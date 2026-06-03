@@ -3,6 +3,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -83,9 +84,17 @@ New? Start here: panda getting-started`,
 
 // Execute runs the root command.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+	err := rootCmd.Execute()
+	if err == nil {
+		return
 	}
+
+	var exitErr *exitCodeError
+	if errors.As(err, &exitErr) {
+		os.Exit(exitErr.code)
+	}
+
+	os.Exit(1)
 }
 
 func init() {

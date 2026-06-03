@@ -18,8 +18,6 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 
-	authclient "github.com/ethpandaops/panda/pkg/auth/client"
-	authstore "github.com/ethpandaops/panda/pkg/auth/store"
 	"github.com/ethpandaops/panda/pkg/config"
 	"github.com/ethpandaops/panda/pkg/configpath"
 	"github.com/ethpandaops/panda/pkg/proxy"
@@ -328,18 +326,29 @@ volumes:
 `, serverImage, dockerGID, configDir, configDir, configDir)
 }
 
+// newDockerClient constructs a Docker client from the environment with API
+// version negotiation enabled.
+func newDockerClient() (*dockerclient.Client, error) {
+	cli, err := dockerclient.NewClientWithOpts(
+		dockerclient.FromEnv,
+		dockerclient.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating docker client: %w", err)
+	}
+
+	return cli, nil
+}
+
 func checkDockerAndPullImages() error {
 	fmt.Println("Checking Docker...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cli, err := dockerclient.NewClientWithOpts(
-		dockerclient.FromEnv,
-		dockerclient.WithAPIVersionNegotiation(),
-	)
+	cli, err := newDockerClient()
 	if err != nil {
-		return fmt.Errorf("docker is required but could not create client: %w", err)
+		return err
 	}
 	defer func() { _ = cli.Close() }()
 
@@ -472,24 +481,8 @@ func initEnsureAuth() (bool, error) {
 		return true, nil
 	}
 
-	clientCfg := authclient.Config{
-		IssuerURL: target.issuerURL,
-		ClientID:  target.clientID,
-		Resource:  target.resource,
-	}
-
-	if target.proxyURL != "" {
-		clientCfg.BrandingURL = strings.TrimRight(target.proxyURL, "/") + "/auth/branding"
-	}
-
-	client := authclient.New(log, clientCfg)
-
-	store := authstore.New(log, authstore.Config{
-		AuthClient: client,
-		IssuerURL:  target.issuerURL,
-		ClientID:   target.clientID,
-		Resource:   target.resource,
-	})
+	client := newAuthClient(target, false)
+	store := newAuthStore(target, client)
 
 	// Try to get a valid access token (refreshes automatically if needed).
 	if _, err := store.GetAccessToken(); err == nil {

@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 
 	"github.com/ethpandaops/panda/internal/github"
@@ -283,12 +282,9 @@ func execNewBinary(args ...string) error {
 
 // pullSandboxImage pulls the default sandbox container image.
 func pullSandboxImage() error {
-	cli, err := dockerclient.NewClientWithOpts(
-		dockerclient.FromEnv,
-		dockerclient.WithAPIVersionNegotiation(),
-	)
+	cli, err := newDockerClient()
 	if err != nil {
-		return fmt.Errorf("creating docker client: %w", err)
+		return err
 	}
 	defer func() { _ = cli.Close() }()
 

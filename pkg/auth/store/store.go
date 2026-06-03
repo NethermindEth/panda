@@ -68,10 +68,11 @@ type Config struct {
 
 // store implements the Store interface.
 type store struct {
-	log    logrus.FieldLogger
-	cfg    Config
-	mu     sync.RWMutex
-	tokens *client.Tokens
+	log       logrus.FieldLogger
+	cfg       Config
+	mu        sync.RWMutex
+	tokens    *client.Tokens
+	refreshMu sync.Mutex
 }
 
 // New creates a new credential store.
@@ -182,7 +183,7 @@ func (s *store) GetAccessToken() (string, error) {
 			return "", fmt.Errorf("access token expired and no refresh token available")
 		}
 
-		newTokens, err := s.refresh(tokens.RefreshToken)
+		newTokens, err := s.refresh(tokens)
 		if err != nil {
 			if time.Now().Before(tokens.ExpiresAt) {
 				return tokens.AccessToken, nil
@@ -212,14 +213,19 @@ func (s *store) IsAuthenticated() bool {
 
 // getTokens returns cached tokens or loads them from disk.
 func (s *store) getTokens() (*client.Tokens, error) {
-	s.mu.RLock()
-	tokens := s.tokens
-	s.mu.RUnlock()
-	if tokens != nil {
+	if tokens := s.snapshotTokens(); tokens != nil {
 		return tokens, nil
 	}
 
 	return s.Load()
+}
+
+// snapshotTokens returns the currently cached tokens under a read lock.
+func (s *store) snapshotTokens() *client.Tokens {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.tokens
 }
 
 // needsRefresh returns true if the token should be refreshed.
@@ -246,27 +252,38 @@ func (s *store) needsRefresh(tokens *client.Tokens) bool {
 	return false
 }
 
-// refresh refreshes the access token.
-func (s *store) refresh(refreshToken string) (*client.Tokens, error) {
+// refresh refreshes the access token using the supplied prior tokens.
+func (s *store) refresh(prior *client.Tokens) (*client.Tokens, error) {
 	if s.cfg.AuthClient == nil {
 		return nil, fmt.Errorf("no auth client configured for refresh")
 	}
 
-	if refreshToken == "" {
+	if prior == nil || prior.RefreshToken == "" {
 		return nil, fmt.Errorf("no refresh token available")
 	}
 
+	// Serialize refreshes so concurrent callers do not double-call the provider.
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+
+	// Another caller may have refreshed while we waited for the lock.
+	if current := s.snapshotTokens(); current != nil && !s.needsRefresh(current) {
+		return current, nil
+	}
+
+	priorIssuedAt := prior.RefreshTokenIssuedAt
+
 	s.log.Debug("Refreshing access token")
 
-	newTokens, err := s.cfg.AuthClient.Refresh(context.Background(), refreshToken)
+	newTokens, err := s.cfg.AuthClient.Refresh(context.Background(), prior.RefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("refreshing token: %w", err)
 	}
 
 	// If the provider did not rotate the refresh token, preserve the
 	// original issued-at so the half-life check stays correct.
-	if newTokens.RefreshTokenIssuedAt.IsZero() && s.tokens != nil {
-		newTokens.RefreshTokenIssuedAt = s.tokens.RefreshTokenIssuedAt
+	if newTokens.RefreshTokenIssuedAt.IsZero() {
+		newTokens.RefreshTokenIssuedAt = priorIssuedAt
 	}
 
 	// Save new tokens.

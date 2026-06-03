@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -126,6 +128,43 @@ func TestGetAccessTokenDoesNotRefreshBeforeRefreshTokenHalfLife(t *testing.T) {
 	}
 }
 
+func TestGetAccessTokenSerializesConcurrentRefreshes(t *testing.T) {
+	t.Parallel()
+
+	client := &countingAuthClient{}
+	store := New(logrus.New(), Config{
+		AuthClient:    client,
+		RefreshBuffer: 5 * time.Minute,
+	}).(*store)
+	store.tokens = &authclient.Tokens{
+		AccessToken:  "expiring",
+		RefreshToken: "refresh-token",
+		ExpiresAt:    time.Now().Add(time.Minute), // within the refresh buffer
+	}
+
+	const goroutines = 16
+
+	var wg sync.WaitGroup
+
+	wg.Add(goroutines)
+
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+
+			if _, err := store.GetAccessToken(); err != nil {
+				t.Errorf("GetAccessToken returned error: %v", err)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if got := client.refreshCalls.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 provider refresh call, got %d", got)
+	}
+}
+
 type stubAuthClient struct {
 	refreshCalls int
 	refreshErr   error
@@ -140,6 +179,26 @@ func (s *stubAuthClient) Refresh(_ context.Context, _ string) (*authclient.Token
 	if s.refreshErr != nil {
 		return nil, s.refreshErr
 	}
+
+	return &authclient.Tokens{
+		AccessToken:  "refreshed-token",
+		RefreshToken: "refresh-token",
+		ExpiresIn:    3600,
+		ExpiresAt:    time.Now().Add(time.Hour),
+		TokenType:    "Bearer",
+	}, nil
+}
+
+type countingAuthClient struct {
+	refreshCalls atomic.Int64
+}
+
+func (s *countingAuthClient) Login(_ context.Context) (*authclient.Tokens, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *countingAuthClient) Refresh(_ context.Context, _ string) (*authclient.Tokens, error) {
+	s.refreshCalls.Add(1)
 
 	return &authclient.Tokens{
 		AccessToken:  "refreshed-token",

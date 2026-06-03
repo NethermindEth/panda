@@ -15,8 +15,6 @@ const (
 	exactConstantScore     = 1.0
 	prefixConstantScore    = 0.8
 	substringConstantScore = 0.5
-	specTextMatchBoost     = 0.15
-	specTextMatchBase      = 0.30
 )
 
 // ConsensusSpecSearchResult includes a spec and its similarity score.
@@ -158,9 +156,9 @@ func (idx *ConsensusSpecIndex) SearchSpecs(
 				strings.Contains(st.topic, lowerQuery) ||
 				strings.Contains(st.content, lowerQuery) {
 				if existing, ok := bestBySpec[specIdx]; ok {
-					bestBySpec[specIdx] = existing + specTextMatchBoost
+					bestBySpec[specIdx] = existing + textMatchBoost
 				} else {
-					bestBySpec[specIdx] = specTextMatchBase
+					bestBySpec[specIdx] = textMatchBase
 				}
 			}
 		}

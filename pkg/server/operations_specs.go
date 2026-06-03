@@ -28,19 +28,19 @@ func (s *service) handleSpecsOperation(
 
 func (s *service) handleSpecsGetConstant(w http.ResponseWriter, r *http.Request) {
 	if s.specsRegistry == nil {
-		http.Error(w, "consensus specs not available", http.StatusServiceUnavailable)
+		writeAPIError(w, http.StatusServiceUnavailable, "consensus specs not available")
 		return
 	}
 
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	name, err := requiredStringArg(req.Args, "name")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -48,12 +48,12 @@ func (s *service) handleSpecsGetConstant(w http.ResponseWriter, r *http.Request)
 
 	constant, found := s.specsRegistry.GetConstant(name, fork)
 	if !found {
-		http.Error(w, "constant not found: "+name, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "constant not found: "+name)
 		return
 	}
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
-		Kind: "object",
+		Kind: operations.ResultKindObject,
 		Data: map[string]any{
 			"name":  constant.Name,
 			"value": constant.Value,
@@ -64,13 +64,13 @@ func (s *service) handleSpecsGetConstant(w http.ResponseWriter, r *http.Request)
 
 func (s *service) handleSpecsListConstants(w http.ResponseWriter, r *http.Request) {
 	if s.specsRegistry == nil {
-		http.Error(w, "consensus specs not available", http.StatusServiceUnavailable)
+		writeAPIError(w, http.StatusServiceUnavailable, "consensus specs not available")
 		return
 	}
 
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -97,7 +97,7 @@ func (s *service) handleSpecsListConstants(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
-		Kind: "object",
+		Kind: operations.ResultKindObject,
 		Data: map[string]any{
 			"constants": results,
 			"count":     len(results),
@@ -107,36 +107,36 @@ func (s *service) handleSpecsListConstants(w http.ResponseWriter, r *http.Reques
 
 func (s *service) handleSpecsGetSpec(w http.ResponseWriter, r *http.Request) {
 	if s.specsRegistry == nil {
-		http.Error(w, "consensus specs not available", http.StatusServiceUnavailable)
+		writeAPIError(w, http.StatusServiceUnavailable, "consensus specs not available")
 		return
 	}
 
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	fork, err := requiredStringArg(req.Args, "fork")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	topic, err := requiredStringArg(req.Args, "topic")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	spec, found := s.specsRegistry.GetSpec(fork, topic)
 	if !found {
-		http.Error(w, "spec not found: "+fork+"/"+topic, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "spec not found: "+fork+"/"+topic)
 		return
 	}
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
-		Kind: "object",
+		Kind: operations.ResultKindObject,
 		Data: map[string]any{
 			"fork":    spec.Fork,
 			"topic":   spec.Topic,

@@ -188,7 +188,10 @@ func (h *manageSessionHandler) handleCreate(ctx context.Context, ownerID string)
 			Message:      "Session created. Pass this session_id to execute_python.",
 		}
 
-		data, _ := json.MarshalIndent(response, "", "  ")
+		data, err := json.MarshalIndent(response, "", "  ")
+		if err != nil {
+			return CallToolError(fmt.Errorf("marshaling response: %w", err)), nil
+		}
 
 		return CallToolSuccess(string(data)), nil
 	}

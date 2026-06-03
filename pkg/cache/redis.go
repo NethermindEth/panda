@@ -62,7 +62,7 @@ func (c *RedisCache) Set(ctx context.Context, key string, value []byte) error {
 // GetMulti retrieves multiple values by keys.
 func (c *RedisCache) GetMulti(ctx context.Context, keys []string) (map[string][]byte, error) {
 	if len(keys) == 0 {
-		return nil, nil
+		return make(map[string][]byte), nil
 	}
 
 	prefixedKeys := make([]string, len(keys))
