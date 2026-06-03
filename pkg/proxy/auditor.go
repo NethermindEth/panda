@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	simpleauth "github.com/ethpandaops/panda/pkg/auth"
+	"github.com/ethpandaops/panda/pkg/auth"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 )
 
@@ -54,7 +54,7 @@ func (a *Auditor) Middleware() func(http.Handler) http.Handler {
 				if len(proxyUser.Groups) > 0 {
 					fields["groups"] = proxyUser.Groups
 				}
-			} else if authUser := simpleauth.GetAuthUser(r.Context()); authUser != nil {
+			} else if authUser := auth.GetAuthUser(r.Context()); authUser != nil {
 				fields["subject"] = authUser.Subject
 				fields["username"] = authUser.Username
 

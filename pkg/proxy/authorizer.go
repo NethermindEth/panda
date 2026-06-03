@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	simpleauth "github.com/ethpandaops/panda/pkg/auth"
+	"github.com/ethpandaops/panda/pkg/auth"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 	"github.com/ethpandaops/panda/pkg/types"
 )
@@ -210,7 +210,7 @@ func getUserOrgs(ctx context.Context) ([]string, bool) {
 	}
 
 	// Check auth.AuthUser (OAuth mode).
-	if user := simpleauth.GetAuthUser(ctx); user != nil {
+	if user := auth.GetAuthUser(ctx); user != nil {
 		return user.Orgs, true
 	}
 

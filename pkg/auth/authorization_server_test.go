@@ -23,7 +23,7 @@ const testIssuerURL = "https://proxy.example.com"
 func TestHandleTokenIssuesAccessAndRefreshTokens(t *testing.T) {
 	t.Parallel()
 
-	svc := newTestSimpleService(t, nil)
+	svc := newTestAuthorizationServer(t, nil)
 	verifier := "verifier-123"
 	challenge := sha256.Sum256([]byte(verifier))
 	svc.codes["auth-code"] = &issuedCode{
@@ -78,7 +78,7 @@ func TestHandleTokenIssuesAccessAndRefreshTokens(t *testing.T) {
 func TestMiddlewareUsesConfiguredIssuerURLInsteadOfRequestHost(t *testing.T) {
 	t.Parallel()
 
-	svc := newTestSimpleService(t, nil)
+	svc := newTestAuthorizationServer(t, nil)
 	token, err := svc.issueAccessToken(testIssuerURL, testIssuerURL, "sam", 42, nil)
 	if err != nil {
 		t.Fatalf("issueAccessToken failed: %v", err)
@@ -105,7 +105,7 @@ func TestMiddlewareUsesConfiguredIssuerURLInsteadOfRequestHost(t *testing.T) {
 func TestHandleTokenRefreshGrantRevalidatesOrgMembership(t *testing.T) {
 	t.Parallel()
 
-	svc := newTestSimpleService(t, []string{"ethpandaops"})
+	svc := newTestAuthorizationServer(t, []string{"ethpandaops"})
 	stubGitHub := &stubGitHubClient{
 		user: &github.GitHubUser{
 			ID:            42,
@@ -194,7 +194,7 @@ func TestHandleTokenRefreshGrantRevalidatesOrgMembership(t *testing.T) {
 func TestHandleTokenRefreshGrantRejectsRemovedOrg(t *testing.T) {
 	t.Parallel()
 
-	svc := newTestSimpleService(t, []string{"ethpandaops"})
+	svc := newTestAuthorizationServer(t, []string{"ethpandaops"})
 	svc.github = &stubGitHubClient{
 		user: &github.GitHubUser{
 			ID:            42,
@@ -244,7 +244,7 @@ func TestHandleTokenRefreshGrantRejectsRemovedOrg(t *testing.T) {
 func TestHandleDeviceTokenGrantEmitsSlowDownOnFastPolling(t *testing.T) {
 	t.Parallel()
 
-	svc := newTestSimpleService(t, nil)
+	svc := newTestAuthorizationServer(t, nil)
 	svc.devices["device-code"] = &deviceAuth{
 		DeviceCode: "device-code",
 		UserCode:   "ABCD-EFGH",
@@ -308,7 +308,7 @@ func (s *stubGitHubClient) GetUser(_ context.Context, accessToken string) (*gith
 	return s.user, nil
 }
 
-func exchangeToken(t *testing.T, svc *simpleService, targetURL string, values url.Values) tokenResponseBody {
+func exchangeToken(t *testing.T, svc *authorizationServer, targetURL string, values url.Values) tokenResponseBody {
 	t.Helper()
 
 	rec := httptest.NewRecorder()
@@ -342,10 +342,10 @@ func parseAccessTokenClaims(t *testing.T, tokenString string) *tokenClaims {
 	return claims
 }
 
-func newTestSimpleService(t *testing.T, allowedOrgs []string) *simpleService {
+func newTestAuthorizationServer(t *testing.T, allowedOrgs []string) *authorizationServer {
 	t.Helper()
 
-	service, err := NewSimpleService(logrus.New(), Config{
+	service, err := NewAuthorizationServer(logrus.New(), Config{
 		Enabled:     true,
 		IssuerURL:   testIssuerURL,
 		AllowedOrgs: append([]string(nil), allowedOrgs...),
@@ -356,8 +356,8 @@ func newTestSimpleService(t *testing.T, allowedOrgs []string) *simpleService {
 		Tokens: TokensConfig{SecretKey: "test-secret"},
 	})
 	if err != nil {
-		t.Fatalf("NewSimpleService failed: %v", err)
+		t.Fatalf("NewAuthorizationServer failed: %v", err)
 	}
 
-	return service.(*simpleService)
+	return service.(*authorizationServer)
 }

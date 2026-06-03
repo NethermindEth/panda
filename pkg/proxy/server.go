@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 
-	simpleauth "github.com/ethpandaops/panda/pkg/auth"
+	"github.com/ethpandaops/panda/pkg/auth"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 	"github.com/ethpandaops/panda/pkg/types"
 )
@@ -49,7 +49,7 @@ type server struct {
 	url     string
 
 	authenticator Authenticator
-	authService   simpleauth.SimpleService
+	authService   auth.AuthorizationServer
 	authorizer    *Authorizer
 	rateLimiter   *RateLimiter
 	auditor       *Auditor
@@ -108,7 +108,7 @@ func newServer(log logrus.FieldLogger, cfg ServerConfig, hostURL, port string) (
 	case AuthModeNone:
 		s.authenticator = NewNoneAuthenticator(log)
 	case AuthModeOAuth:
-		authCfg := simpleauth.Config{
+		authCfg := auth.Config{
 			Enabled:         true,
 			IssuerURL:       cfg.Auth.IssuerURL,
 			GitHub:          cfg.Auth.GitHub,
@@ -119,13 +119,13 @@ func newServer(log logrus.FieldLogger, cfg ServerConfig, hostURL, port string) (
 			SuccessPage:     cfg.Auth.SuccessPage,
 		}
 
-		authSvc, err := simpleauth.NewSimpleService(log, authCfg)
+		authSvc, err := auth.NewAuthorizationServer(log, authCfg)
 		if err != nil {
 			return nil, fmt.Errorf("creating proxy auth service: %w", err)
 		}
 
 		s.authService = authSvc
-		s.authenticator = NewSimpleServiceAuthenticator(authSvc)
+		s.authenticator = NewAuthServerAuthenticator(authSvc)
 	case AuthModeOIDC:
 		oidcAuth, err := NewOIDCAuthenticator(log, OIDCAuthenticatorConfig{
 			Issuers: cfg.Auth.Issuers,
