@@ -148,7 +148,7 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 				"list_datasources": {
 					Signature:   "prometheus.list_datasources() -> list[dict]",
 					Description: "List available Prometheus datasources. Prefer datasources://prometheus resource.",
-					Returns:     "List of dicts with 'name', 'description', 'url' keys",
+					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys",
 				},
 				"query": {
 					Signature:   "prometheus.query(instance_name: str, promql: str, time: str = None) -> dict",

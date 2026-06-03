@@ -93,10 +93,33 @@ func (s *service) handleBlockArchiveListNetworks(w http.ResponseWriter, r *http.
 		networks = filtered
 	}
 
+	items := make([]listItem, 0, len(networks))
+	for _, n := range networks {
+		items = append(items, n.listItem())
+	}
+
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
 		Kind: operations.ResultKindObject,
-		Data: map[string]any{"networks": networks},
+		Data: map[string]any{"networks": items},
 	})
+}
+
+func (n blockArchiveNetwork) listItem() listItem {
+	extra := map[string]any{
+		"status":  n.Status,
+		"source":  n.Source,
+		"polling": n.Polling,
+	}
+	if n.ChainID != nil {
+		extra["chain_id"] = *n.ChainID
+	}
+
+	return listItem{
+		Name:  n.Name,
+		URL:   n.TracoorURL,
+		Type:  "block_archive",
+		Extra: extra,
+	}
 }
 
 func (s *service) handleBlockArchiveBaseURL(w http.ResponseWriter) {

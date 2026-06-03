@@ -29,12 +29,13 @@ func (s *service) handlePrometheusOperation(operationID string, w http.ResponseW
 }
 
 func (s *service) handlePrometheusListDatasources(w http.ResponseWriter) {
-	items := make([]map[string]any, 0)
+	items := make([]listItem, 0)
 	for _, info := range s.proxyService.PrometheusDatasourceInfo() {
-		items = append(items, map[string]any{
-			"name":        info.Name,
-			"description": info.Description,
-			"url":         info.Metadata["url"],
+		items = append(items, listItem{
+			Name:        info.Name,
+			Description: info.Description,
+			URL:         info.Metadata["url"],
+			Type:        info.Type,
 		})
 	}
 

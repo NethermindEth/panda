@@ -148,7 +148,7 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 				"list_datasources": {
 					Signature:   "loki.list_datasources() -> list[dict]",
 					Description: "List available Loki datasources. Prefer datasources://loki resource.",
-					Returns:     "List of dicts with 'name', 'description', 'url' keys",
+					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys",
 				},
 				"query": {
 					Signature:   "loki.query(instance_name: str, logql: str, limit: int = 100, start: str = None, end: str = None, direction: str = 'backward') -> dict",

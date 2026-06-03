@@ -30,8 +30,9 @@ def _coerce_slot(slot: Any) -> int:
 def list_networks(active_only: bool = True) -> list[dict[str, Any]]:
     """Return the networks the archive knows about.
 
-    Each entry has keys: name, status ("active"|"inactive"), source
-    ("static"|"cartographoor"), tracoor_url, chain_id, polling.
+    Each entry has keys: name, description, url (tracoor explorer), type,
+    extra. The extra dict carries status ("active"|"inactive"), source
+    ("static"|"cartographoor"), chain_id, and polling.
     Set active_only=False to include inactive devnets the archive has
     historical blocks for but is no longer polling.
     """

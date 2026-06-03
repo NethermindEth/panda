@@ -222,7 +222,7 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 				"list_datasources": {
 					Signature:   "clickhouse.list_datasources() -> list[dict]",
 					Description: "List available ClickHouse datasources. Prefer datasources://clickhouse resource instead.",
-					Returns:     "List of dicts with 'name', 'description', 'database' keys",
+					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys ('extra.database' holds the default database)",
 				},
 				"query": {
 					Signature:   "clickhouse.query(datasource: str, sql: str) -> pandas.DataFrame",

@@ -74,41 +74,63 @@ func printKeyValue(pairs [][2]string) {
 	_ = w.Flush()
 }
 
-// printDatasourceList renders a list of datasources from an operations response.
-// This is shared across clickhouse, prometheus, and loki list-datasources commands.
+// printDatasourceList renders a datasource listing response under the
+// "datasources" key. Shared across clickhouse, prometheus, and loki.
 func printDatasourceList(response *operations.Response) error {
+	return printListing(response, "datasources", "No datasources found.")
+}
+
+// printListing renders a unified listing response (items with name,
+// description, url, and type) as a table, sorted by name. The top-level
+// key selects the "datasources" or "networks" array in the response data.
+func printListing(response *operations.Response, key, emptyMessage string) error {
 	if isJSON() {
 		return printJSON(response)
 	}
 
 	data, _ := response.Data.(map[string]any)
-	items, _ := data["datasources"].([]any)
+	items, _ := data[key].([]any)
 
 	if len(items) == 0 {
-		fmt.Println("No datasources found.")
+		fmt.Println(emptyMessage)
 
 		return nil
 	}
 
 	rows := make([][]string, 0, len(items))
+	showURL := false
 
 	for _, item := range items {
-		ds, _ := item.(map[string]any)
-		name, _ := ds["name"].(string)
-		desc, _ := ds["description"].(string)
+		entry, _ := item.(map[string]any)
+		name, _ := entry["name"].(string)
+		desc, _ := entry["description"].(string)
+		dsType, _ := entry["type"].(string)
+		dsURL, _ := entry["url"].(string)
 
 		if desc == "" {
 			desc = name
 		}
 
-		rows = append(rows, []string{name, desc})
+		if dsURL != "" {
+			showURL = true
+		}
+
+		rows = append(rows, []string{name, desc, dsType, dsURL})
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
 		return rows[i][0] < rows[j][0]
 	})
 
-	printTable([]string{"NAME", "DESCRIPTION"}, rows)
+	headers := []string{"NAME", "DESCRIPTION", "TYPE", "URL"}
+	if !showURL {
+		headers = headers[:3]
+		for i := range rows {
+			rows[i] = rows[i][:3]
+		}
+	}
+
+	printTable(headers, rows)
 
 	return nil
 }

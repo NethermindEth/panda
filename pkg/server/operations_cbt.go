@@ -51,16 +51,17 @@ func (s *service) handleCBTListNetworks(w http.ResponseWriter) {
 		return
 	}
 
-	items := make([]map[string]any, 0, len(networks))
+	items := make([]listItem, 0, len(networks))
 	for name, baseURL := range networks {
-		items = append(items, map[string]any{
-			"name":    name,
-			"cbt_url": baseURL,
+		items = append(items, listItem{
+			Name: name,
+			URL:  baseURL,
+			Type: "cbt",
 		})
 	}
 
 	sort.Slice(items, func(i, j int) bool {
-		return items[i]["name"].(string) < items[j]["name"].(string)
+		return items[i].Name < items[j].Name
 	})
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{

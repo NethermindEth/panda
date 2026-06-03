@@ -13,7 +13,11 @@ def _require_cbt_available() -> None:
         raise ValueError("CBT is not enabled or no CBT instances are available.")
 
 
-def list_networks() -> list[dict[str, str]]:
+def list_networks() -> list[dict[str, Any]]:
+    """List networks with CBT instances.
+
+    Each entry has keys: name, description, url, type, extra.
+    """
     _require_cbt_available()
     data = _runtime.invoke_data("cbt.list_networks")
     return data.get("networks", [])
