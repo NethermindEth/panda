@@ -8,7 +8,7 @@ from ethpandaops import _runtime
 
 
 def list_datasources() -> list[dict[str, Any]]:
-    """List available ClickHouse clusters."""
+    """List available ClickHouse datasources."""
     response = _runtime.invoke("clickhouse.list_datasources")
     data = response.get("data", {})
     datasources = data.get("datasources", [])
@@ -18,15 +18,15 @@ def list_datasources() -> list[dict[str, Any]]:
 
 
 def query(
-    cluster_name: str,
+    datasource: str,
     sql: str,
     parameters: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
-    """Execute a SQL query against a ClickHouse cluster."""
+    """Execute a SQL query against a ClickHouse datasource."""
     return _runtime.invoke_tsv_dataframe(
         "clickhouse.query",
         {
-            "cluster": cluster_name,
+            "datasource": datasource,
             "sql": sql,
             "parameters": parameters,
         },
@@ -34,7 +34,7 @@ def query(
 
 
 def query_raw(
-    cluster_name: str,
+    datasource: str,
     sql: str,
     parameters: dict[str, Any] | None = None,
 ) -> tuple[list[tuple], list[str]]:
@@ -42,7 +42,7 @@ def query_raw(
     return _runtime.invoke_tsv_rows(
         "clickhouse.query_raw",
         {
-            "cluster": cluster_name,
+            "datasource": datasource,
             "sql": sql,
             "parameters": parameters,
         },

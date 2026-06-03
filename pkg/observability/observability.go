@@ -55,7 +55,10 @@ func (s *service) Start(ctx context.Context) error {
 		return errors.New("metrics server already started")
 	}
 
-	addr := fmt.Sprintf(":%d", s.cfg.MetricsPort)
+	addr := s.cfg.MetricsAddr
+	if addr == "" {
+		addr = fmt.Sprintf(":%d", s.cfg.MetricsPort)
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())

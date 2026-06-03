@@ -46,7 +46,7 @@ func (s *service) handleClickHouseQuery(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	clusterName, err := requiredStringArg(req.Args, "cluster")
+	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
@@ -66,12 +66,12 @@ func (s *service) handleClickHouseQuery(w http.ResponseWriter, r *http.Request) 
 	body, status, headers, err := s.proxyDatasourceRequest(
 		r.Context(),
 		"clickhouse",
-		clusterName,
+		datasource,
 		http.MethodPost,
 		"/clickhouse/?"+params.Encode(),
 		strings.NewReader(sql),
 		http.Header{
-			handlers.DatasourceHeader: []string{clusterName},
+			handlers.DatasourceHeader: []string{datasource},
 			"Content-Type":            []string{"text/plain"},
 		},
 	)
