@@ -52,6 +52,34 @@ func completeNetworkNames(_ *cobra.Command, args []string, _ string) ([]string, 
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
+// completeEthNodeArgs completes the ethnode positional args. The first arg
+// (network) is completed from ethnode's own active networks; the second arg
+// (instance) is a per-node DNS label the proxy cannot enumerate, so it is left
+// to free text with file completion disabled.
+func completeEthNodeArgs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	response, err := runServerOperation("ethnode.list_networks", map[string]any{})
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	data, _ := response.Data.(map[string]any)
+	items, _ := data["networks"].([]any)
+
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		network, _ := item.(map[string]any)
+		if name, _ := network["name"].(string); name != "" {
+			names = append(names, name)
+		}
+	}
+
+	return names, cobra.ShellCompDirectiveNoFileComp
+}
+
 // completeSessionIDs completes the first positional arg with session IDs.
 func completeSessionIDs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {

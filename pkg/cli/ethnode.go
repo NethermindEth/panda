@@ -17,6 +17,7 @@ var ethnodeCmd = &cobra.Command{
 Nodes are identified by network and instance name (e.g., "lighthouse-geth-1").
 
 Examples:
+  panda ethnode list-datasources
   panda ethnode syncing dencun-devnet-12 lighthouse-geth-1
   panda ethnode peers dencun-devnet-12 lighthouse-geth-1
   panda ethnode finality dencun-devnet-12 lighthouse-geth-1
@@ -27,6 +28,7 @@ func init() {
 	rootCmd.AddCommand(ethnodeCmd)
 
 	ethnodeCmd.AddCommand(
+		ethNodeListDatasourcesCmd,
 		ethNodeSyncingCmd,
 		ethNodeVersionCmd,
 		ethNodeHealthCmd,
@@ -38,15 +40,29 @@ func init() {
 		ethNodeExecRPCCmd,
 	)
 
-	ethNodeSyncingCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeVersionCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeHealthCmd.ValidArgsFunction = completeNetworkNames
-	ethNodePeersCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeFinalityCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeHeaderCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeBlockNumberCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeBeaconGetCmd.ValidArgsFunction = completeNetworkNames
-	ethNodeExecRPCCmd.ValidArgsFunction = completeNetworkNames
+	ethNodeSyncingCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeVersionCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeHealthCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodePeersCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeFinalityCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeHeaderCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeBlockNumberCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeBeaconGetCmd.ValidArgsFunction = completeEthNodeArgs
+	ethNodeExecRPCCmd.ValidArgsFunction = completeEthNodeArgs
+}
+
+var ethNodeListDatasourcesCmd = &cobra.Command{
+	Use:   "list-datasources",
+	Short: "List available ethnode datasources",
+	Args:  cobra.NoArgs,
+	RunE: func(_ *cobra.Command, _ []string) error {
+		response, err := runServerOperation("ethnode.list_datasources", map[string]any{})
+		if err != nil {
+			return err
+		}
+
+		return printDatasourceList(response)
+	},
 }
 
 var ethNodeSyncingCmd = &cobra.Command{
