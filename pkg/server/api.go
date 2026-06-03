@@ -761,11 +761,10 @@ func (s *service) proxyRequestWithService(
 	}
 	req.Header.Del("Authorization")
 
-	tokenID := fmt.Sprintf("server-api-%d", time.Now().UnixNano())
-	token := proxySvc.RegisterToken(tokenID)
-	defer proxySvc.RevokeToken(tokenID)
+	token := proxySvc.RegisterToken()
+	defer proxySvc.RevokeToken()
 
-	if token != "" && token != "none" {
+	if token != "" && token != proxy.NoAuthToken {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 

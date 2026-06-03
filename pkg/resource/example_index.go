@@ -74,15 +74,15 @@ func NewExampleIndex(
 	for catKey, cat := range categories {
 		for _, ex := range cat.Examples {
 			// Build a rich embedding text that includes category context,
-			// cluster, and table names from the query. This gives the
+			// target, and table names from the query. This gives the
 			// embedding model enough signal to distinguish examples that
 			// use different tables for similar-sounding questions.
 			var parts []string
 			parts = append(parts, cat.Name+": "+ex.Name)
 			parts = append(parts, ex.Description)
 
-			if ex.Cluster != "" {
-				parts = append(parts, "Cluster: "+ex.Cluster)
+			if ex.Target != "" {
+				parts = append(parts, "Target: "+ex.Target)
 			}
 
 			if tables := extractTableNames(ex.Query); len(tables) > 0 {

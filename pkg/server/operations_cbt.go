@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	cbtmodule "github.com/ethpandaops/panda/modules/cbt"
 	"github.com/ethpandaops/panda/pkg/operations"
 )
 
@@ -217,11 +218,9 @@ func (s *service) cbtNetworks() (map[string]string, error) {
 		return nil, fmt.Errorf("cbt is unavailable")
 	}
 
-	// Cartographoor discovery does not expose a CBT service URL, so the per-network
-	// host is derived from the standard ethpandaops.io naming convention.
 	networks := make(map[string]string)
 	for name := range s.cartographoorClient.GetActiveNetworks() {
-		networks[name] = fmt.Sprintf("https://cbt.%s.ethpandaops.io", name)
+		networks[name] = cbtmodule.NetworkBaseURL(name)
 	}
 
 	return networks, nil

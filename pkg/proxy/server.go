@@ -567,11 +567,11 @@ func (s *server) URL() string {
 	return s.url
 }
 
-func (s *server) RegisterToken(executionID string) string {
-	return "none"
+func (s *server) RegisterToken() string {
+	return NoAuthToken
 }
 
-func (s *server) RevokeToken(executionID string) {
+func (s *server) RevokeToken() {
 }
 
 // ClickHouseDatasources returns the list of ClickHouse datasource names.
@@ -708,6 +708,11 @@ func (s *server) LokiDatasourceInfo() []types.DatasourceInfo {
 // EthNodeAvailable returns true if the ethnode handler is configured.
 func (s *server) EthNodeAvailable() bool {
 	return s.ethNodeHandler != nil
+}
+
+// EthNodeDatasourceInfo returns the ethnode datasource info when configured.
+func (s *server) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	return ethNodeDatasourceInfo(s.EthNodeAvailable())
 }
 
 // EmbeddingAvailable returns true if the embedding service is configured.

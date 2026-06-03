@@ -191,9 +191,9 @@ func (c *proxyClient) URL() string {
 	return c.cfg.URL
 }
 
-func (c *proxyClient) RegisterToken(_ string) string {
+func (c *proxyClient) RegisterToken() string {
 	if c.credStore == nil {
-		return "none"
+		return NoAuthToken
 	}
 
 	token, err := c.loadAccessToken()
@@ -210,7 +210,7 @@ func (c *proxyClient) RegisterToken(_ string) string {
 	return token
 }
 
-func (c *proxyClient) RevokeToken(_ string) {
+func (c *proxyClient) RevokeToken() {
 	// No-op: tokens are managed by the proxy control plane.
 }
 
@@ -349,6 +349,14 @@ func (c *proxyClient) EthNodeAvailable() bool {
 	defer c.mu.RUnlock()
 
 	return c.datasources.EthNodeAvailable
+}
+
+// EthNodeDatasourceInfo returns the ethnode datasource info when configured.
+func (c *proxyClient) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return ethNodeDatasourceInfo(c.datasources.EthNodeAvailable)
 }
 
 // EmbeddingAvailable returns true if the proxy has embedding configured.

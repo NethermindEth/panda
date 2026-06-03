@@ -277,7 +277,7 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 			ExampleName:     result.Example.Name,
 			Description:     result.Example.Description,
 			Query:           result.Example.Query,
-			TargetCluster:   result.Example.Cluster,
+			TargetCluster:   result.Example.Target,
 			SimilarityScore: result.Score,
 		})
 

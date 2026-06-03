@@ -458,14 +458,13 @@ func (c *clickhouseSchemaClient) refresh(ctx context.Context) error {
 			continue
 		}
 
-		tokenID := "clickhouse-schema-" + datasourceName
-		token := datasourceProxy.RegisterToken(tokenID)
+		token := datasourceProxy.RegisterToken()
 		if token == "" {
 			c.log.WithField("datasource", datasourceName).Warn("Proxy token is empty; schema discovery requests may fail if auth is required")
 		}
 
 		tables, err := c.discoverClusterSchema(ctx, clusterName, datasourceName, datasourceProxy, token)
-		datasourceProxy.RevokeToken(tokenID)
+		datasourceProxy.RevokeToken()
 		if err != nil {
 			c.log.WithError(err).WithField("cluster", clusterName).Warn("Failed to discover cluster schema")
 
@@ -636,7 +635,7 @@ func (c *clickhouseSchemaClient) queryJSON(
 	}
 
 	req.Header.Set(handlers.DatasourceHeader, datasourceName)
-	if token != "" && token != "none" {
+	if token != "" && token != proxy.NoAuthToken {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	req.Header.Set("Content-Type", "text/plain")

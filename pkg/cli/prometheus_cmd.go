@@ -13,6 +13,8 @@ var (
 	promRangeStart string
 	promRangeEnd   string
 	promRangeStep  string
+	promLabelStart string
+	promLabelEnd   string
 )
 
 var prometheusCmd = &cobra.Command{
@@ -37,15 +39,18 @@ func init() {
 	promQueryCmd.Flags().StringVar(&promQueryTime, "time", "", "Evaluation timestamp (RFC3339, unix, or 'now-1h')")
 
 	prometheusCmd.AddCommand(promQueryRangeCmd)
-	promQueryRangeCmd.Flags().StringVar(&promRangeStart, "start", "", "Start time (required)")
-	promQueryRangeCmd.Flags().StringVar(&promRangeEnd, "end", "", "End time (required)")
+	promQueryRangeCmd.Flags().StringVar(&promRangeStart, "start", "", "Start time (RFC3339, unix, or 'now-1h'; default 'now-1h')")
+	promQueryRangeCmd.Flags().StringVar(&promRangeEnd, "end", "", "End time (RFC3339, unix, or 'now'; default 'now')")
 	promQueryRangeCmd.Flags().StringVar(&promRangeStep, "step", "", "Resolution step e.g. '1m' (required)")
-	_ = promQueryRangeCmd.MarkFlagRequired("start")
-	_ = promQueryRangeCmd.MarkFlagRequired("end")
 	_ = promQueryRangeCmd.MarkFlagRequired("step")
 
 	prometheusCmd.AddCommand(promLabelsCmd)
+	promLabelsCmd.Flags().StringVar(&promLabelStart, "start", "", "Start time (RFC3339, unix, or 'now-1h')")
+	promLabelsCmd.Flags().StringVar(&promLabelEnd, "end", "", "End time (RFC3339, unix, or 'now')")
+
 	prometheusCmd.AddCommand(promLabelValuesCmd)
+	promLabelValuesCmd.Flags().StringVar(&promLabelStart, "start", "", "Start time (RFC3339, unix, or 'now-1h')")
+	promLabelValuesCmd.Flags().StringVar(&promLabelEnd, "end", "", "End time (RFC3339, unix, or 'now')")
 
 	promQueryCmd.ValidArgsFunction = completeDatasourceNames("prometheus")
 	promQueryRangeCmd.ValidArgsFunction = completeDatasourceNames("prometheus")
@@ -119,6 +124,8 @@ var promLabelsCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, args []string) error {
 		response, err := runServerOperationRaw("prometheus.get_labels", map[string]any{
 			"datasource": args[0],
+			"start":      promLabelStart,
+			"end":        promLabelEnd,
 		})
 		if err != nil {
 			return err
@@ -140,6 +147,8 @@ var promLabelValuesCmd = &cobra.Command{
 		response, err := runServerOperationRaw("prometheus.get_label_values", map[string]any{
 			"datasource": args[0],
 			"label":      args[1],
+			"start":      promLabelStart,
+			"end":        promLabelEnd,
 		})
 		if err != nil {
 			return err

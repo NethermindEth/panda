@@ -122,8 +122,8 @@ type schemaProxyClient struct {
 func (c *schemaProxyClient) Start(_ context.Context) error { return nil }
 func (c *schemaProxyClient) Stop(_ context.Context) error  { return nil }
 func (c *schemaProxyClient) URL() string                   { return c.url }
-func (c *schemaProxyClient) RegisterToken(_ string) string { return c.token }
-func (c *schemaProxyClient) RevokeToken(_ string)          {}
+func (c *schemaProxyClient) RegisterToken() string         { return c.token }
+func (c *schemaProxyClient) RevokeToken()                  {}
 func (c *schemaProxyClient) ClickHouseDatasources() []string {
 	return schemaDatasourceNames(c.ClickHouseDatasourceInfo())
 }
@@ -137,9 +137,12 @@ func (c *schemaProxyClient) PrometheusDatasourceInfo() []types.DatasourceInfo {
 func (c *schemaProxyClient) LokiDatasources() []string                  { return nil }
 func (c *schemaProxyClient) LokiDatasourceInfo() []types.DatasourceInfo { return nil }
 func (c *schemaProxyClient) EthNodeAvailable() bool                     { return false }
-func (c *schemaProxyClient) EmbeddingAvailable() bool                   { return false }
-func (c *schemaProxyClient) EmbeddingModel() string                     { return "" }
-func (c *schemaProxyClient) Discover(_ context.Context) error           { return nil }
+func (c *schemaProxyClient) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	return nil
+}
+func (c *schemaProxyClient) EmbeddingAvailable() bool         { return false }
+func (c *schemaProxyClient) EmbeddingModel() string           { return "" }
+func (c *schemaProxyClient) Discover(_ context.Context) error { return nil }
 func (c *schemaProxyClient) EnsureAuthenticated(_ context.Context) error {
 	return nil
 }

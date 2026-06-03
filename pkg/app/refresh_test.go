@@ -322,8 +322,8 @@ type fakeProxyClient struct {
 func (f *fakeProxyClient) Start(_ context.Context) error               { return nil }
 func (f *fakeProxyClient) Stop(_ context.Context) error                { return nil }
 func (f *fakeProxyClient) URL() string                                 { return "" }
-func (f *fakeProxyClient) RegisterToken(_ string) string               { return "" }
-func (f *fakeProxyClient) RevokeToken(_ string)                        {}
+func (f *fakeProxyClient) RegisterToken() string                       { return "" }
+func (f *fakeProxyClient) RevokeToken()                                {}
 func (f *fakeProxyClient) Discover(_ context.Context) error            { return nil }
 func (f *fakeProxyClient) EnsureAuthenticated(_ context.Context) error { return nil }
 
@@ -357,6 +357,15 @@ func (f *fakeProxyClient) LokiDatasources() []string {
 
 func (f *fakeProxyClient) LokiDatasourceInfo() []types.DatasourceInfo { return f.loki }
 
-func (f *fakeProxyClient) EthNodeAvailable() bool   { return f.ethnode }
+func (f *fakeProxyClient) EthNodeAvailable() bool { return f.ethnode }
+
+func (f *fakeProxyClient) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	if !f.ethnode {
+		return nil
+	}
+
+	return []types.DatasourceInfo{{Type: "ethnode", Name: "ethnode"}}
+}
+
 func (f *fakeProxyClient) EmbeddingAvailable() bool { return false }
 func (f *fakeProxyClient) EmbeddingModel() string   { return "" }
