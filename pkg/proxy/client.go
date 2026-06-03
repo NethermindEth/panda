@@ -22,43 +22,7 @@ import (
 // Client connects to a proxy server and provides datasource discovery plus
 // proxy-scoped bearer tokens for server-to-proxy calls.
 type Client interface {
-	// Start starts the client and performs initial discovery.
-	Start(ctx context.Context) error
-
-	// Stop stops the client.
-	Stop(ctx context.Context) error
-
-	// URL returns the proxy URL.
-	URL() string
-
-	// RegisterToken returns the current proxy access token for server-to-proxy calls.
-	RegisterToken(executionID string) string
-
-	// RevokeToken is a no-op for client-managed bearer tokens.
-	RevokeToken(executionID string)
-
-	// ClickHouseDatasources returns the discovered ClickHouse datasource names.
-	ClickHouseDatasources() []string
-	// ClickHouseDatasourceInfo returns detailed ClickHouse datasource info.
-	ClickHouseDatasourceInfo() []types.DatasourceInfo
-
-	// PrometheusDatasources returns the discovered Prometheus datasource names.
-	PrometheusDatasources() []string
-	// PrometheusDatasourceInfo returns detailed Prometheus datasource info.
-	PrometheusDatasourceInfo() []types.DatasourceInfo
-
-	// LokiDatasources returns the discovered Loki datasource names.
-	LokiDatasources() []string
-	// LokiDatasourceInfo returns detailed Loki datasource info.
-	LokiDatasourceInfo() []types.DatasourceInfo
-
-	// EthNodeAvailable returns true if the proxy has ethnode credentials configured.
-	EthNodeAvailable() bool
-
-	// EmbeddingAvailable returns true if the proxy has embedding configured.
-	EmbeddingAvailable() bool
-	// EmbeddingModel returns the configured embedding model name.
-	EmbeddingModel() string
+	Service
 
 	// Discover fetches datasource information from the proxy.
 	Discover(ctx context.Context) error

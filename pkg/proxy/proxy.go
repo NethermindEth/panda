@@ -32,13 +32,9 @@ type Service interface {
 	// ClickHouseDatasourceInfo returns detailed ClickHouse datasource info.
 	ClickHouseDatasourceInfo() []types.DatasourceInfo
 
-	// PrometheusDatasources returns the list of Prometheus datasource names.
-	PrometheusDatasources() []string
 	// PrometheusDatasourceInfo returns detailed Prometheus datasource info.
 	PrometheusDatasourceInfo() []types.DatasourceInfo
 
-	// LokiDatasources returns the list of Loki datasource names.
-	LokiDatasources() []string
 	// LokiDatasourceInfo returns detailed Loki datasource info.
 	LokiDatasourceInfo() []types.DatasourceInfo
 
