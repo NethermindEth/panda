@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -82,9 +84,10 @@ New? Start here: panda getting-started`,
 	SilenceUsage: true,
 }
 
-// Execute runs the root command.
+// Execute runs the root command and translates its error into a process
+// exit code.
 func Execute() {
-	err := rootCmd.Execute()
+	err := executeWithSignals()
 	if err == nil {
 		return
 	}
@@ -95,6 +98,15 @@ func Execute() {
 	}
 
 	os.Exit(1)
+}
+
+// executeWithSignals runs the root command with a context that is canceled
+// on SIGINT or SIGTERM, so in-flight work aborts when the user hits Ctrl+C.
+func executeWithSignals() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {

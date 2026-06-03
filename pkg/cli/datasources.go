@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"sort"
 
@@ -33,9 +32,8 @@ func init() {
 	))
 }
 
-func runDatasources(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-	response, err := listDatasources(ctx, datasourcesType)
+func runDatasources(cmd *cobra.Command, _ []string) error {
+	response, err := listDatasources(cmd.Context(), datasourcesType)
 	if err != nil {
 		return fmt.Errorf("listing datasources: %w", err)
 	}

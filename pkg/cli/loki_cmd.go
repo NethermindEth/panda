@@ -69,8 +69,8 @@ func init() {
 var lokiListDatasourcesCmd = &cobra.Command{
 	Use:   "list-datasources",
 	Short: "List available Loki datasources",
-	RunE: func(_ *cobra.Command, _ []string) error {
-		response, err := runServerOperation("loki.list_datasources", map[string]any{})
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		response, err := runServerOperation(cmd, "loki.list_datasources", map[string]any{})
 		if err != nil {
 			return err
 		}
@@ -83,8 +83,8 @@ var lokiQueryCmd = &cobra.Command{
 	Use:   "query <datasource> <logql>",
 	Short: "Execute a LogQL range query",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperationRaw("loki.query", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperationRaw(cmd, "loki.query", map[string]any{
 			"datasource": args[0],
 			"query":      args[1],
 			"limit":      lokiLimit,
@@ -108,8 +108,8 @@ var lokiQueryInstantCmd = &cobra.Command{
 	Use:   "query-instant <datasource> <logql>",
 	Short: "Execute an instant LogQL query",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperationRaw("loki.query_instant", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperationRaw(cmd, "loki.query_instant", map[string]any{
 			"datasource": args[0],
 			"query":      args[1],
 			"limit":      lokiLimit,
@@ -132,8 +132,8 @@ var lokiLabelsCmd = &cobra.Command{
 	Use:   "labels <datasource>",
 	Short: "List all label names",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperationRaw("loki.get_labels", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperationRaw(cmd, "loki.get_labels", map[string]any{
 			"datasource": args[0],
 			"start":      lokiStart,
 			"end":        lokiEnd,
@@ -154,8 +154,8 @@ var lokiLabelValuesCmd = &cobra.Command{
 	Use:   "label-values <datasource> <label>",
 	Short: "Get all values for a label",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperationRaw("loki.get_label_values", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperationRaw(cmd, "loki.get_label_values", map[string]any{
 			"datasource": args[0],
 			"label":      args[1],
 			"start":      lokiStart,

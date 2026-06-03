@@ -74,9 +74,11 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
+	ctx := commandContext(cmd)
+
 	// 1. Docker check and image pulls.
 	if !initSkipDocker {
-		if err := checkDockerAndPullImages(); err != nil {
+		if err := checkDockerAndPullImages(ctx); err != nil {
 			return err
 		}
 	} else {
@@ -96,7 +98,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	// Discover auth settings from the proxy (best-effort, falls back to defaults).
 	fmt.Println("Discovering proxy auth settings...")
 
-	discoverCtx, discoverCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	discoverCtx, discoverCancel := context.WithTimeout(ctx, 15*time.Second)
 	defer discoverCancel()
 
 	authCfg := discoverProxyAuth(discoverCtx, initProxyURL)
@@ -151,7 +153,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	if !initSkipAuth {
 		fmt.Println()
 
-		if skipped, err := initEnsureAuth(); err != nil {
+		if skipped, err := initEnsureAuth(cmd); err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		} else if skipped {
 			fmt.Println("Already authenticated (credentials still valid)")
@@ -340,10 +342,10 @@ func newDockerClient() (*dockerclient.Client, error) {
 	return cli, nil
 }
 
-func checkDockerAndPullImages() error {
+func checkDockerAndPullImages(ctx context.Context) error {
 	fmt.Println("Checking Docker...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	cli, err := newDockerClient()
@@ -352,7 +354,7 @@ func checkDockerAndPullImages() error {
 	}
 	defer func() { _ = cli.Close() }()
 
-	if _, err := cli.Ping(ctx); err != nil {
+	if _, err := cli.Ping(pingCtx); err != nil {
 		return fmt.Errorf("docker is not running: %w", err)
 	}
 
@@ -364,12 +366,12 @@ func checkDockerAndPullImages() error {
 	}
 
 	// Pull server image.
-	if err := pullImage(cli, initServerImage); err != nil {
+	if err := pullImage(ctx, cli, initServerImage); err != nil {
 		return err
 	}
 
 	// Pull sandbox image.
-	if err := pullImage(cli, initSandboxImage); err != nil {
+	if err := pullImage(ctx, cli, initSandboxImage); err != nil {
 		return err
 	}
 
@@ -390,13 +392,13 @@ func checkDockerCompose() error {
 	return nil
 }
 
-func pullImage(cli *dockerclient.Client, image string) error {
+func pullImage(ctx context.Context, cli *dockerclient.Client, image string) error {
 	fmt.Printf("Pulling image %s...\n", image)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	pullCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
-	reader, err := cli.ImagePull(ctx, image, dockerimage.PullOptions{})
+	reader, err := cli.ImagePull(pullCtx, image, dockerimage.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("pulling image %s: %w", image, err)
 	}
@@ -470,8 +472,8 @@ func probeSocketGIDInContainer(socketPath string) (string, error) {
 // full OAuth login flow. Returns (true, nil) if auth was skipped because
 // credentials are already valid, (false, nil) on successful fresh login,
 // or (false, err) on failure.
-func initEnsureAuth() (bool, error) {
-	target, err := resolveAuthTarget(context.Background())
+func initEnsureAuth(cmd *cobra.Command) (bool, error) {
+	target, err := resolveAuthTarget(commandContext(cmd))
 	if err != nil {
 		return false, err
 	}
@@ -492,5 +494,5 @@ func initEnsureAuth() (bool, error) {
 	// No valid credentials — run the full login flow.
 	fmt.Println("Authenticating...")
 
-	return false, runAuthLogin(nil, nil)
+	return false, runAuthLogin(cmd, nil)
 }

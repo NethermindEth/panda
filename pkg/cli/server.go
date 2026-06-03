@@ -301,8 +301,8 @@ func runServerLogs(_ *cobra.Command, _ []string) error {
 	return runDockerCompose(resolveComposeFile(), "logs", "-f")
 }
 
-func runServerUpdate(_ *cobra.Command, _ []string) error {
-	return upgradeServer()
+func runServerUpdate(cmd *cobra.Command, _ []string) error {
+	return upgradeServer(commandContext(cmd))
 }
 
 // resolveComposeFile returns the docker-compose file path from

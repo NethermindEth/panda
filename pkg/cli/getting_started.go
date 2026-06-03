@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -26,10 +25,8 @@ func init() {
 	rootCmd.AddCommand(gettingStartedCmd)
 }
 
-func runGettingStarted(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-
-	response, err := readResourceWithClientContext(ctx, "panda://getting-started", types.ClientContextCLIParam)
+func runGettingStarted(cmd *cobra.Command, _ []string) error {
+	response, err := readResourceWithClientContext(cmd.Context(), "panda://getting-started", types.ClientContextCLIParam)
 	if err != nil {
 		return fmt.Errorf("reading getting-started guide: %w", err)
 	}

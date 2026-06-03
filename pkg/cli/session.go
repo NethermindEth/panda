@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -49,9 +48,8 @@ func init() {
 	sessionDestroyCmd.ValidArgsFunction = completeSessionIDs
 }
 
-func runSessionList(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-	response, err := listSessions(ctx)
+func runSessionList(cmd *cobra.Command, _ []string) error {
+	response, err := listSessions(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("listing sessions: %w", err)
 	}
@@ -78,9 +76,8 @@ func runSessionList(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runSessionCreate(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-	response, err := createSession(ctx)
+func runSessionCreate(cmd *cobra.Command, _ []string) error {
+	response, err := createSession(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
 	}
@@ -94,9 +91,8 @@ func runSessionCreate(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runSessionDestroy(_ *cobra.Command, args []string) error {
-	ctx := context.Background()
-	if err := destroySession(ctx, args[0]); err != nil {
+func runSessionDestroy(cmd *cobra.Command, args []string) error {
+	if err := destroySession(cmd.Context(), args[0]); err != nil {
 		return fmt.Errorf("destroying session: %w", err)
 	}
 

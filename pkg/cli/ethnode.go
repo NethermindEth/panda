@@ -55,8 +55,8 @@ var ethNodeListDatasourcesCmd = &cobra.Command{
 	Use:   "list-datasources",
 	Short: "List available ethnode datasources",
 	Args:  cobra.NoArgs,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		response, err := runServerOperation("ethnode.list_datasources", map[string]any{})
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		response, err := runServerOperation(cmd, "ethnode.list_datasources", map[string]any{})
 		if err != nil {
 			return err
 		}
@@ -69,8 +69,8 @@ var ethNodeSyncingCmd = &cobra.Command{
 	Use:   "syncing <network> <instance>",
 	Short: "Get beacon node sync status",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperation("ethnode.get_node_syncing", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperation(cmd, "ethnode.get_node_syncing", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -99,8 +99,8 @@ var ethNodeVersionCmd = &cobra.Command{
 	Use:   "version <network> <instance>",
 	Short: "Get node software version",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		beaconResp, err := runServerOperation("ethnode.get_node_version", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		beaconResp, err := runServerOperation(cmd, "ethnode.get_node_version", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -108,7 +108,7 @@ var ethNodeVersionCmd = &cobra.Command{
 			return err
 		}
 
-		executionResp, execErr := runServerOperation("ethnode.web3_client_version", map[string]any{
+		executionResp, execErr := runServerOperation(cmd, "ethnode.web3_client_version", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -143,8 +143,8 @@ var ethNodeHealthCmd = &cobra.Command{
 	Use:   "health <network> <instance>",
 	Short: "Get beacon node health status",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperation("ethnode.get_node_health", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperation(cmd, "ethnode.get_node_health", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -178,8 +178,8 @@ var ethNodePeersCmd = &cobra.Command{
 	Use:   "peers <network> <instance>",
 	Short: "Get peer count",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperation("ethnode.get_peer_count", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperation(cmd, "ethnode.get_peer_count", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -214,8 +214,8 @@ var ethNodeFinalityCmd = &cobra.Command{
 	Use:   "finality <network> <instance>",
 	Short: "Get finality checkpoints",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperation("ethnode.get_finality_checkpoints", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperation(cmd, "ethnode.get_finality_checkpoints", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -246,13 +246,13 @@ var ethNodeHeaderCmd = &cobra.Command{
 	Use:   "header <network> <instance> [slot]",
 	Short: "Get beacon block header",
 	Args:  cobra.RangeArgs(2, 3),
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		slot := "head"
 		if len(args) == 3 {
 			slot = args[2]
 		}
 
-		response, err := runServerOperation("ethnode.get_beacon_headers", map[string]any{
+		response, err := runServerOperation(cmd, "ethnode.get_beacon_headers", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 			"slot":     slot,
@@ -284,8 +284,8 @@ var ethNodeBlockNumberCmd = &cobra.Command{
 	Use:   "block-number <network> <instance>",
 	Short: "Get latest execution layer block number",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperation("ethnode.eth_block_number", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperation(cmd, "ethnode.eth_block_number", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 		})
@@ -313,13 +313,13 @@ Examples:
   panda ethnode beacon-get my-devnet lighthouse-geth-1 /eth/v1/node/identity
   panda ethnode beacon-get my-devnet lighthouse-geth-1 /eth/v1/config/deposit_contract`,
 	Args: cobra.ExactArgs(3),
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[2]
 		if !strings.HasPrefix(path, "/") {
 			path = "/" + path
 		}
 
-		response, err := runServerOperationRaw("ethnode.beacon_get", map[string]any{
+		response, err := runServerOperationRaw(cmd, "ethnode.beacon_get", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 			"path":     path,
@@ -343,7 +343,7 @@ Examples:
   panda ethnode exec-rpc my-devnet lighthouse-geth-1 eth_getBlockByNumber '["latest", false]'
   panda ethnode exec-rpc my-devnet lighthouse-geth-1 eth_chainId`,
 	Args: cobra.RangeArgs(3, 4),
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var params []any
 		if len(args) == 4 {
 			if err := json.Unmarshal([]byte(args[3]), &params); err != nil {
@@ -351,7 +351,7 @@ Examples:
 			}
 		}
 
-		response, err := runServerOperationRaw("ethnode.execution_rpc", map[string]any{
+		response, err := runServerOperationRaw(cmd, "ethnode.execution_rpc", map[string]any{
 			"network":  args[0],
 			"instance": args[1],
 			"method":   args[2],

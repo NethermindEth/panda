@@ -64,10 +64,10 @@ func init() {
 		"skip confirmation prompt")
 }
 
-func runUpgrade(_ *cobra.Command, _ []string) error {
+func runUpgrade(cmd *cobra.Command, _ []string) error {
 	checker := github.NewReleaseChecker(github.RepoOwner, github.RepoName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(commandContext(cmd), 30*time.Second)
 	defer cancel()
 
 	fmt.Println("Checking for updates...")
@@ -128,7 +128,7 @@ func runUpgrade(_ *cobra.Command, _ []string) error {
 				return fmt.Errorf("upgrading server: %w", err)
 			}
 		} else {
-			if err := upgradeServer(); err != nil {
+			if err := upgradeServer(commandContext(cmd)); err != nil {
 				return fmt.Errorf("upgrading server: %w", err)
 			}
 		}
@@ -197,7 +197,7 @@ func downloadAndReplaceBinary(release *github.Release) error {
 }
 
 // upgradeServer regenerates the compose file, pulls images, and restarts.
-func upgradeServer() error {
+func upgradeServer(ctx context.Context) error {
 	fmt.Println("Regenerating docker-compose.yaml...")
 
 	if err := regenerateComposeFile(); err != nil {
@@ -214,14 +214,14 @@ func upgradeServer() error {
 
 	fmt.Println("Pulling sandbox image...")
 
-	if err := pullSandboxImage(); err != nil {
+	if err := pullSandboxImage(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to pull sandbox image: %v\n", err)
 	}
 
 	fmt.Println("Restarting server...")
 
 	return runComposeAndWait(
-		context.Background(),
+		ctx,
 		compose,
 		[]string{"up", "-d"},
 		defaultServerHealthWaitTimeout,
@@ -281,14 +281,14 @@ func execNewBinary(args ...string) error {
 }
 
 // pullSandboxImage pulls the default sandbox container image.
-func pullSandboxImage() error {
+func pullSandboxImage(ctx context.Context) error {
 	cli, err := newDockerClient()
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
 
-	return pullImage(cli, defaultSandboxImage)
+	return pullImage(ctx, cli, defaultSandboxImage)
 }
 
 // promptConfirm prints a prompt and waits for Y/n input.

@@ -67,9 +67,9 @@ func init() {
 	buildCmd.Flags().BoolVar(&buildWait, "wait", false, "block until the build completes instead of returning immediately")
 }
 
-func runBuild(_ *cobra.Command, args []string) error {
+func runBuild(cmd *cobra.Command, args []string) error {
 	client := args[0]
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	resp, err := triggerBuild(ctx, serverapi.BuildTriggerRequest{
 		Client:     client,
@@ -127,13 +127,13 @@ func runBuild(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func runBuildStatus(_ *cobra.Command, args []string) error {
+func runBuildStatus(cmd *cobra.Command, args []string) error {
 	runID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid run ID: %w", err)
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	status, err := getBuildStatus(ctx, runID)
 	if err != nil {

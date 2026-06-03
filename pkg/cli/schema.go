@@ -40,8 +40,8 @@ func init() {
 	schemaCmd.ValidArgsFunction = completeSchemaArgs
 }
 
-func runSchema(_ *cobra.Command, args []string) error {
-	ctx := context.Background()
+func runSchema(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 
 	var (
 		response *clickhousemodule.TablesListResponse
