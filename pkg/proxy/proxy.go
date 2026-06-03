@@ -4,6 +4,7 @@ package proxy
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/ethpandaops/panda/pkg/types"
 )
@@ -36,6 +37,12 @@ type Service interface {
 	ClickHouseDatasources() []string
 	// ClickHouseDatasourceInfo returns detailed ClickHouse datasource info.
 	ClickHouseDatasourceInfo() []types.DatasourceInfo
+	// ClickHouseQuery runs a ClickHouse SQL query against the named datasource
+	// through the proxy and returns the raw response body. The params are
+	// appended to the query string (e.g. default_format, param_* bindings).
+	// A non-2xx response from the proxy is returned as an error containing the
+	// status code and the response body.
+	ClickHouseQuery(ctx context.Context, datasource, sql string, params url.Values) ([]byte, error)
 
 	// PrometheusDatasourceInfo returns detailed Prometheus datasource info.
 	PrometheusDatasourceInfo() []types.DatasourceInfo

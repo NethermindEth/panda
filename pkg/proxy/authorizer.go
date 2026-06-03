@@ -89,30 +89,30 @@ func (a *Authorizer) FilterDatasources(ctx context.Context, resp DatasourcesResp
 		EmbeddingModel:     resp.EmbeddingModel,
 	}
 
-	filtered.ClickHouse, filtered.ClickHouseInfo = a.filterDatasourceList(userOrgs, hasUser, "clickhouse", resp.ClickHouse, resp.ClickHouseInfo)
-	filtered.Prometheus, filtered.PrometheusInfo = a.filterDatasourceList(userOrgs, hasUser, "prometheus", resp.Prometheus, resp.PrometheusInfo)
-	filtered.Loki, filtered.LokiInfo = a.filterDatasourceList(userOrgs, hasUser, "loki", resp.Loki, resp.LokiInfo)
+	filtered.ClickHouseInfo = a.filterDatasourceList(userOrgs, hasUser, "clickhouse", resp.ClickHouseInfo)
+	filtered.PrometheusInfo = a.filterDatasourceList(userOrgs, hasUser, "prometheus", resp.PrometheusInfo)
+	filtered.LokiInfo = a.filterDatasourceList(userOrgs, hasUser, "loki", resp.LokiInfo)
 
 	return filtered
 }
 
-func (a *Authorizer) filterDatasourceList(userOrgs []string, hasUser bool, dsType string, names []string, infos []types.DatasourceInfo) ([]string, []types.DatasourceInfo) {
-	filteredNames := make([]string, 0, len(names))
-	filteredInfos := make([]types.DatasourceInfo, 0, len(infos))
+func (a *Authorizer) filterDatasourceList(userOrgs []string, hasUser bool, dsType string, infos []types.DatasourceInfo) []types.DatasourceInfo {
+	if len(infos) == 0 {
+		return nil
+	}
 
-	for i, name := range names {
-		variant, ok := a.matchingVariant(userOrgs, hasUser, ruleKey(dsType, name))
+	filtered := make([]types.DatasourceInfo, 0, len(infos))
+
+	for _, info := range infos {
+		variant, ok := a.matchingVariant(userOrgs, hasUser, ruleKey(dsType, info.Name))
 		if !ok {
 			continue
 		}
 
-		filteredNames = append(filteredNames, name)
-		if i < len(infos) {
-			filteredInfos = append(filteredInfos, datasourceInfoForVariant(infos[i], variant))
-		}
+		filtered = append(filtered, datasourceInfoForVariant(info, variant))
 	}
 
-	return filteredNames, filteredInfos
+	return filtered
 }
 
 // isAllowed checks if the request context is authorized to access the datasource.

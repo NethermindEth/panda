@@ -159,11 +159,8 @@ func TestAuthorizerFilterDatasources(t *testing.T) {
 	const testEmbeddingModel = "test-embed-model"
 
 	resp := DatasourcesResponse{
-		ClickHouse:         []string{"restricted", "public"},
 		ClickHouseInfo:     []types.DatasourceInfo{{Type: "clickhouse", Name: "restricted"}, {Type: "clickhouse", Name: "public"}},
-		Prometheus:         []string{"internal"},
 		PrometheusInfo:     []types.DatasourceInfo{{Type: "prometheus", Name: "internal"}},
-		Loki:               []string{"logs"},
 		LokiInfo:           []types.DatasourceInfo{{Type: "loki", Name: "logs"}},
 		EmbeddingAvailable: true,
 		EmbeddingModel:     testEmbeddingModel,
@@ -180,25 +177,25 @@ func TestAuthorizerFilterDatasources(t *testing.T) {
 	// User in ethpandaops — should see everything.
 	ctx := withAuthUser(context.Background(), &AuthUser{Groups: []string{"ethpandaops"}})
 	filtered := authorizer.FilterDatasources(ctx, resp)
-	assert.Equal(t, []string{"restricted", "public"}, filtered.ClickHouse)
-	assert.Equal(t, []string{"internal"}, filtered.Prometheus)
-	assert.Equal(t, []string{"logs"}, filtered.Loki)
+	assert.Equal(t, []string{"restricted", "public"}, datasourceNames(filtered.ClickHouseInfo))
+	assert.Equal(t, []string{"internal"}, datasourceNames(filtered.PrometheusInfo))
+	assert.Equal(t, []string{"logs"}, datasourceNames(filtered.LokiInfo))
 	assertEmbeddingPreserved(t, filtered)
 
 	// User in sigp — should see public clickhouse + internal prometheus + logs.
 	ctx = withAuthUser(context.Background(), &AuthUser{Groups: []string{"sigp"}})
 	filtered = authorizer.FilterDatasources(ctx, resp)
-	assert.Equal(t, []string{"public"}, filtered.ClickHouse)
-	assert.Equal(t, []string{"internal"}, filtered.Prometheus)
-	assert.Equal(t, []string{"logs"}, filtered.Loki)
+	assert.Equal(t, []string{"public"}, datasourceNames(filtered.ClickHouseInfo))
+	assert.Equal(t, []string{"internal"}, datasourceNames(filtered.PrometheusInfo))
+	assert.Equal(t, []string{"logs"}, datasourceNames(filtered.LokiInfo))
 	assertEmbeddingPreserved(t, filtered)
 
 	// User in unknown org — only unrestricted datasources.
 	ctx = withAuthUser(context.Background(), &AuthUser{Groups: []string{"unknown"}})
 	filtered = authorizer.FilterDatasources(ctx, resp)
-	assert.Equal(t, []string{"public"}, filtered.ClickHouse)
-	assert.Empty(t, filtered.Prometheus)
-	assert.Equal(t, []string{"logs"}, filtered.Loki)
+	assert.Equal(t, []string{"public"}, datasourceNames(filtered.ClickHouseInfo))
+	assert.Empty(t, filtered.PrometheusInfo)
+	assert.Equal(t, []string{"logs"}, datasourceNames(filtered.LokiInfo))
 	assertEmbeddingPreserved(t, filtered)
 
 	// No auth user — return everything.
@@ -222,8 +219,8 @@ func TestAuthorizerFilterDatasourcesEndpoint(t *testing.T) {
 
 	var resp DatasourcesResponse
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-	assert.Contains(t, resp.ClickHouse, "restricted")
-	assert.Contains(t, resp.ClickHouse, "public")
+	assert.Contains(t, datasourceNames(resp.ClickHouseInfo), "restricted")
+	assert.Contains(t, datasourceNames(resp.ClickHouseInfo), "public")
 
 	// User in unknown org — should only see unrestricted datasources.
 	rec = httptest.NewRecorder()
@@ -233,8 +230,8 @@ func TestAuthorizerFilterDatasourcesEndpoint(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-	assert.NotContains(t, resp.ClickHouse, "restricted")
-	assert.Contains(t, resp.ClickHouse, "public")
+	assert.NotContains(t, datasourceNames(resp.ClickHouseInfo), "restricted")
+	assert.Contains(t, datasourceNames(resp.ClickHouseInfo), "public")
 }
 
 func TestAuthorizerSelectsDatasourceVariants(t *testing.T) {
@@ -258,20 +255,19 @@ func TestAuthorizerSelectsDatasourceVariants(t *testing.T) {
 	authorizer := NewAuthorizer(logrus.New(), cfg)
 	chConfigs, _, _, _ := cfg.ToHandlerConfigs()
 	resp := DatasourcesResponse{
-		ClickHouse:     []string{"clickhouse-raw"},
 		ClickHouseInfo: []types.DatasourceInfo{{Type: "clickhouse", Name: "clickhouse-raw"}},
 	}
 
 	coreCtx := withAuthUser(context.Background(), &AuthUser{Groups: []string{"ethpandaops:Core"}})
 	filtered := authorizer.FilterDatasources(coreCtx, resp)
-	assert.Equal(t, []string{"clickhouse-raw"}, filtered.ClickHouse)
+	assert.Equal(t, []string{"clickhouse-raw"}, datasourceNames(filtered.ClickHouseInfo))
 	require.Len(t, filtered.ClickHouseInfo, 1)
 	assert.Equal(t, "internal", filtered.ClickHouseInfo[0].Metadata["database"])
 	assert.Equal(t, "internal", clickHouseUsernameForRoute(chConfigs, authorizer, coreCtx))
 
 	nonCoreCtx := withAuthUser(context.Background(), &AuthUser{Groups: []string{"other-org"}})
 	filtered = authorizer.FilterDatasources(nonCoreCtx, resp)
-	assert.Equal(t, []string{"clickhouse-raw"}, filtered.ClickHouse)
+	assert.Equal(t, []string{"clickhouse-raw"}, datasourceNames(filtered.ClickHouseInfo))
 	require.Len(t, filtered.ClickHouseInfo, 1)
 	assert.Equal(t, "external", filtered.ClickHouseInfo[0].Metadata["database"])
 	assert.Equal(t, "external", clickHouseUsernameForRoute(chConfigs, authorizer, nonCoreCtx))
@@ -308,10 +304,8 @@ func TestAuthorizerDeniesWhenNoDatasourceVariantMatches(t *testing.T) {
 	assert.False(t, ok)
 
 	filtered := authorizer.FilterDatasources(ctx, DatasourcesResponse{
-		ClickHouse:     []string{"clickhouse-raw"},
 		ClickHouseInfo: []types.DatasourceInfo{{Type: "clickhouse", Name: "clickhouse-raw"}},
 	})
-	assert.Empty(t, filtered.ClickHouse)
 	assert.Empty(t, filtered.ClickHouseInfo)
 }
 
@@ -334,7 +328,6 @@ func TestAuthenticatedUserWithNoOrgsCannotUseRestrictedVariant(t *testing.T) {
 
 	authorizer := NewAuthorizer(logrus.New(), cfg)
 	resp := DatasourcesResponse{
-		ClickHouse:     []string{"clickhouse-raw"},
 		ClickHouseInfo: []types.DatasourceInfo{{Type: "clickhouse", Name: "clickhouse-raw"}},
 	}
 
@@ -351,7 +344,7 @@ func TestAuthenticatedUserWithNoOrgsCannotUseRestrictedVariant(t *testing.T) {
 
 			ctx := withAuthUser(context.Background(), &AuthUser{Groups: tt.groups})
 			assert.False(t, authorizer.isAllowed(ctx, "clickhouse", "clickhouse-raw"))
-			assert.Empty(t, authorizer.FilterDatasources(ctx, resp).ClickHouse)
+			assert.Empty(t, authorizer.FilterDatasources(ctx, resp).ClickHouseInfo)
 		})
 	}
 }

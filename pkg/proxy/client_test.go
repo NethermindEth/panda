@@ -26,7 +26,7 @@ func TestDiscoverFiresOnDiscoverHook(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		current := version.Add(1)
 
-		resp := DatasourcesResponse{
+		resp := datasourcesResponseWire{
 			ClickHouse: []string{"a"},
 		}
 		if current >= 2 {
@@ -102,7 +102,7 @@ func TestDatasourceInfoIncludesProxyName(t *testing.T) {
 		cfg: ClientConfig{Name: "hosted"},
 		datasources: &DatasourcesResponse{
 			ClickHouseInfo: []types.DatasourceInfo{{Name: "xatu"}},
-			Prometheus:     []string{"metrics"},
+			PrometheusInfo: []types.DatasourceInfo{{Name: "metrics"}},
 		},
 	}
 

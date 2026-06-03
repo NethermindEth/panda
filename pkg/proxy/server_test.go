@@ -323,8 +323,8 @@ func TestAutodiscoverReconcilesClickHouseDatasource(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&datasources); err != nil {
 		t.Fatalf("decoding /datasources response: %v", err)
 	}
-	if len(datasources.ClickHouse) != 1 || datasources.ClickHouse[0] != "local-kurtosis" {
-		t.Fatalf("/datasources ClickHouse = %v, want [local-kurtosis]", datasources.ClickHouse)
+	if got := datasourceNames(datasources.ClickHouseInfo); len(got) != 1 || got[0] != "local-kurtosis" {
+		t.Fatalf("/datasources ClickHouseInfo names = %v, want [local-kurtosis]", got)
 	}
 	if len(datasources.ClickHouseInfo) != 1 || datasources.ClickHouseInfo[0].Metadata["database"] != "otel" {
 		t.Fatalf("/datasources ClickHouseInfo = %v, want local-kurtosis metadata database=otel", datasources.ClickHouseInfo)

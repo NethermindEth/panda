@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -209,6 +210,16 @@ func (r *routerClient) ClickHouseDatasourceInfo() []types.DatasourceInfo {
 	infos, _ := r.mergeDatasourceInfo("clickhouse")
 
 	return infos
+}
+
+// ClickHouseQuery routes a ClickHouse query to the proxy that owns the datasource.
+func (r *routerClient) ClickHouseQuery(ctx context.Context, datasource, sql string, params url.Values) ([]byte, error) {
+	client, ok := r.ClientForDatasource("clickhouse", datasource)
+	if !ok {
+		return nil, fmt.Errorf("clickhouse datasource %q not found", datasource)
+	}
+
+	return client.ClickHouseQuery(ctx, datasource, sql, params)
 }
 
 // PrometheusDatasources returns merged Prometheus datasource names.
