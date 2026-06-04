@@ -40,7 +40,6 @@ func writePassthroughResponse(w http.ResponseWriter, status int, contentType str
 	if contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
-	w.Header().Set("X-Operation-Transport", "passthrough")
 	w.WriteHeader(status)
 	if len(body) == 0 {
 		return
@@ -87,6 +86,61 @@ func optionalIntArg(args map[string]any, key string, fallback int) int {
 		return int(value)
 	default:
 		return fallback
+	}
+}
+
+func optionalBoolArg(args map[string]any, key string) (*bool, error) {
+	raw, ok := args[key]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+
+	switch v := raw.(type) {
+	case bool:
+		return &v, nil
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "true", "1", "yes":
+			t := true
+			return &t, nil
+		case "false", "0", "no":
+			f := false
+			return &f, nil
+		}
+		return nil, fmt.Errorf("%s must be a boolean", key)
+	default:
+		return nil, fmt.Errorf("%s must be a boolean", key)
+	}
+}
+
+func parseInt64Arg(raw any, key string) (int64, error) {
+	switch value := raw.(type) {
+	case float64:
+		if value != float64(int64(value)) {
+			return 0, fmt.Errorf("%s must be an integer", key)
+		}
+
+		return int64(value), nil
+	case int:
+		return int64(value), nil
+	case int64:
+		return value, nil
+	case json.Number:
+		parsed, err := value.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+		}
+
+		return parsed, nil
+	case string:
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+		}
+
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("%s is required", key)
 	}
 }
 

@@ -47,19 +47,19 @@ func (s *service) handleLokiListDatasources(w http.ResponseWriter) {
 func (s *service) handleLokiQuery(w http.ResponseWriter, r *http.Request, rangeQuery bool) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	logQL, err := requiredStringArg(req.Args, "query")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -88,13 +88,13 @@ func (s *service) handleLokiQuery(w http.ResponseWriter, r *http.Request, rangeQ
 
 		parsedStart, err := parseLokiTime(start, now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
 		parsedEnd, err := parseLokiTime(end, now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -109,7 +109,7 @@ func (s *service) handleLokiQuery(w http.ResponseWriter, r *http.Request, rangeQ
 
 		parsedTime, err := parseLokiTime(queryTime, now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -122,19 +122,19 @@ func (s *service) handleLokiQuery(w http.ResponseWriter, r *http.Request, rangeQ
 func (s *service) handleLokiLabels(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	params, err := buildLokiLabelParams(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -144,25 +144,25 @@ func (s *service) handleLokiLabels(w http.ResponseWriter, r *http.Request) {
 func (s *service) handleLokiLabelValues(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	label, err := requiredStringArg(req.Args, "label")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	params, err := buildLokiLabelParams(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

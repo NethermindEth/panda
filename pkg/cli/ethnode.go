@@ -92,11 +92,12 @@ var ethNodeVersionCmd = &cobra.Command{
 			return err
 		}
 
+		executionResp, execErr := runServerOperation("ethnode.web3_client_version", map[string]any{
+			"network":  args[0],
+			"instance": args[1],
+		})
+
 		if isJSON() {
-			executionResp, execErr := runServerOperation("ethnode.web3_client_version", map[string]any{
-				"network":  args[0],
-				"instance": args[1],
-			})
 			if execErr != nil {
 				return printJSON(map[string]any{
 					"beacon":          beaconResp.Data,
@@ -112,10 +113,6 @@ var ethNodeVersionCmd = &cobra.Command{
 
 		fmt.Printf("CL: %v\n", nestedMap(beaconResp.Data, "data")["version"])
 
-		executionResp, execErr := runServerOperation("ethnode.web3_client_version", map[string]any{
-			"network":  args[0],
-			"instance": args[1],
-		})
 		if execErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "EL: (error: %v)\n", execErr)
 			return nil
@@ -292,7 +289,7 @@ var ethNodeBlockNumberCmd = &cobra.Command{
 
 var ethNodeBeaconGetCmd = &cobra.Command{
 	Use:   "beacon-get <network> <instance> <path>",
-	Short: "GET any beacon API endpoint",
+	Short: "GET any beacon API endpoint (always JSON)",
 	Long: `Make a GET request to any beacon API endpoint.
 The path should start with / (e.g., /eth/v1/node/identity).
 

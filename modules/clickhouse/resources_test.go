@@ -40,14 +40,13 @@ func TestTableKey(t *testing.T) {
 	assert.Equal(t, "default.events", tableKey("default", "events"))
 }
 
-// stubSchemaClient is a ClickHouseSchemaClient backed by fixed in-memory data.
+// stubSchemaClient is a SchemaClient backed by fixed in-memory data.
 type stubSchemaClient struct {
 	clusters map[string]*ClusterTables
 }
 
 func (s *stubSchemaClient) Start(_ context.Context) error                   { return nil }
 func (s *stubSchemaClient) Stop() error                                     { return nil }
-func (s *stubSchemaClient) WaitForReady(_ context.Context) error            { return nil }
 func (s *stubSchemaClient) UpdateDatasources(_ []SchemaDiscoveryDatasource) {}
 func (s *stubSchemaClient) GetAllTables() map[string]*ClusterTables         { return s.clusters }
 

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
 
@@ -14,12 +13,7 @@ import (
 	"github.com/ethpandaops/panda/pkg/types"
 )
 
-const (
-	maxEmbedChars    = 600
-	textMatchBoost   = 0.15
-	textMatchBase    = 0.30
-	exactNumberScore = 1.0
-)
+const exactNumberScore = 1.0
 
 // EIPSearchResult includes the EIP and its similarity score.
 type EIPSearchResult struct {
@@ -215,37 +209,6 @@ func chunkEIP(eip types.EIP) []string {
 	return chunks
 }
 
-var (
-	codeBlockRe = regexp.MustCompile("(?s)```.*?```")
-	linkRe      = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
-	bareURLRe   = regexp.MustCompile(`https?://\S+`)
-)
-
-// stripForEmbedding removes code blocks, URLs, tables, and dense hex
-// from text before embedding.
-func stripForEmbedding(text string) string {
-	text = codeBlockRe.ReplaceAllString(text, "")
-	text = linkRe.ReplaceAllString(text, "$1")
-	text = bareURLRe.ReplaceAllString(text, "")
-
-	lines := strings.Split(text, "\n")
-	filtered := make([]string, 0, len(lines))
-
-	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "|") {
-			continue
-		}
-
-		if len(line) > 80 && !strings.Contains(line, " ") {
-			continue
-		}
-
-		filtered = append(filtered, line)
-	}
-
-	return strings.Join(filtered, "\n")
-}
-
 func containsText(eip types.EIP, lowerQuery string) bool {
 	return strings.Contains(strings.ToLower(eip.Title), lowerQuery) ||
 		strings.Contains(strings.ToLower(eip.Description), lowerQuery) ||
@@ -271,17 +234,4 @@ func extractEIPNumber(query string) int {
 	}
 
 	return 0
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-
-	// Walk back to avoid splitting a multi-byte UTF-8 character.
-	for maxLen > 0 && !utf8.RuneStart(s[maxLen]) {
-		maxLen--
-	}
-
-	return s[:maxLen]
 }

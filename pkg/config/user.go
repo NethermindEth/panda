@@ -224,7 +224,7 @@ func UserConfigPlaceholder() string {
 	return userConfigHeader
 }
 
-// deepMerge recursively merges overlay into base. Overlay values win for leaf
+// DeepMerge recursively merges overlay into base. Overlay values win for leaf
 // values; nested maps are merged recursively. Neither input map is modified.
 func DeepMerge(base, overlay map[string]any) map[string]any {
 	result := make(map[string]any, len(base))

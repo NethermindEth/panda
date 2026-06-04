@@ -95,12 +95,14 @@ uv run python -m scripts.repl
 
 ### Module System
 
-Five compiled-in modules are registered in `pkg/app/app.go`:
+Seven compiled-in modules are registered in `pkg/app/app.go`:
 - `clickhouse`
 - `prometheus`
 - `loki`
 - `dora`
 - `ethnode`
+- `cbt`
+- `block_archive`
 
 Each module implements `module.Module` in `pkg/module/module.go`. Optional capability interfaces live alongside it in `pkg/module/module.go`.
 - `ProxyAware` — receives proxy client for proxy-backed operations

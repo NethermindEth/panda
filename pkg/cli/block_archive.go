@@ -102,7 +102,7 @@ var blockArchiveDownloadCmd = &cobra.Command{
 
 var blockArchiveGetCmd = &cobra.Command{
 	Use:   "get <network> <slot> <block-root>",
-	Short: "Get the decoded JSON SignedBeaconBlock",
+	Short: "Get the decoded JSON SignedBeaconBlock (always JSON)",
 	Args:  cobra.ExactArgs(3),
 	RunE: func(_ *cobra.Command, args []string) error {
 		response, err := runServerOperationRaw("block_archive.get_block_json", map[string]any{

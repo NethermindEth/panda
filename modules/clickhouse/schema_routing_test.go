@@ -34,9 +34,9 @@ func TestSchemaRefreshRoutesDatasourceToOwningProxy(t *testing.T) {
 	log := logrus.New()
 	log.SetOutput(io.Discard)
 
-	client := NewClickHouseSchemaClient(
+	client := NewSchemaClient(
 		log,
-		ClickHouseSchemaConfig{
+		SchemaConfig{
 			QueryTimeout: time.Second,
 			Datasources: []SchemaDiscoveryDatasource{
 				{Name: "local-kurtosis", Cluster: "local-kurtosis"},

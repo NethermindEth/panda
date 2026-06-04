@@ -407,15 +407,3 @@ func buildSuccessPage(user callbackUser) string { //nolint:funlen // single HTML
 		html.EscapeString(statusSub),
 	)
 }
-
-// hasOrg checks if the user belongs to the given org (case-insensitive).
-func hasOrg(orgs []string, target string) bool {
-	lower := strings.ToLower(target)
-	for _, org := range orgs {
-		if strings.ToLower(org) == lower {
-			return true
-		}
-	}
-
-	return false
-}

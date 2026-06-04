@@ -44,6 +44,9 @@ after GitHub authentication.`,
 		}
 
 		log.SetLevel(level)
+		// The proxy runs as a long-lived deployed service whose logs are shipped
+		// to a log aggregator, so it emits structured JSON rather than the
+		// human-readable text format used by the interactive CLI binaries.
 		log.SetFormatter(&logrus.JSONFormatter{})
 
 		return nil

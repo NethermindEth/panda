@@ -11,6 +11,18 @@ import (
 	"github.com/ethpandaops/panda/pkg/config"
 )
 
+// Environment variable names exchanged between the server and sandboxed code.
+// The set/inject side (execsvc) and the filter/inject side (sandbox backend)
+// must agree on these keys, so they live in one place.
+const (
+	// EnvAPIToken carries the per-execution runtime API token into the sandbox.
+	EnvAPIToken = "ETHPANDAOPS_API_TOKEN"
+	// EnvAPIURL carries the server API URL the sandbox calls back into.
+	EnvAPIURL = "ETHPANDAOPS_API_URL"
+	// EnvExecutionID identifies the execution for storage tagging and correlation.
+	EnvExecutionID = "ETHPANDAOPS_EXECUTION_ID"
+)
+
 // Service defines the interface for sandbox code execution backends.
 type Service interface {
 	// Start initializes the sandbox backend (e.g., connecting to Docker).
@@ -42,6 +54,9 @@ type Service interface {
 type ExecuteRequest struct {
 	// Code is the Python code to execute.
 	Code string
+	// ExecutionID identifies this execution. When empty, the backend mints one.
+	// Supplying it lets the caller correlate runtime tokens, storage tagging, and logs.
+	ExecutionID string
 	// Env contains additional environment variables to set in the sandbox.
 	Env map[string]string
 	// Timeout overrides the default execution timeout. If zero, uses the config default.

@@ -1,4 +1,3 @@
-// Package observability provides metrics capabilities for ethpandaops-panda.
 package observability
 
 import (

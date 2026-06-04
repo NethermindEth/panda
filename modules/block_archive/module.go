@@ -3,11 +3,24 @@ package blockarchive
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/ethpandaops/panda/pkg/module"
 	"github.com/ethpandaops/panda/pkg/types"
+)
+
+// Compile-time interface checks.
+var (
+	_ module.Module                        = (*Module)(nil)
+	_ module.DefaultEnabled                = (*Module)(nil)
+	_ module.SandboxEnvProvider            = (*Module)(nil)
+	_ module.DatasourceInfoProvider        = (*Module)(nil)
+	_ module.ExamplesProvider              = (*Module)(nil)
+	_ module.PythonAPIDocsProvider         = (*Module)(nil)
+	_ module.GettingStartedSnippetProvider = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for the Block Archive module.
@@ -20,31 +33,24 @@ func New() *Module {
 	return &Module{}
 }
 
-func (p *Module) Name() string { return "block_archive" }
-
-// Enabled reports whether Block Archive operations should be exposed.
-func (p *Module) Enabled() bool { return p.cfg.IsEnabled() }
+func (m *Module) Name() string { return "block_archive" }
 
 // DefaultEnabled implements module.DefaultEnabled.
 // Block Archive is enabled by default since it requires no configuration.
-func (p *Module) DefaultEnabled() bool { return true }
+func (m *Module) DefaultEnabled() bool { return true }
 
-func (p *Module) Init(rawConfig []byte) error {
+func (m *Module) Init(rawConfig []byte) error {
 	if len(rawConfig) == 0 {
 		return nil
 	}
 
-	return yaml.Unmarshal(rawConfig, &p.cfg)
+	return yaml.Unmarshal(rawConfig, &m.cfg)
 }
 
-func (p *Module) ApplyDefaults() {}
+func (m *Module) ApplyDefaults() {}
 
-func (p *Module) Validate() error {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
-	raw := p.cfg.BaseURL()
+func (m *Module) Validate() error {
+	raw := m.cfg.baseURL()
 
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -71,47 +77,33 @@ func (p *Module) Validate() error {
 }
 
 // URL returns the configured block-archiver base URL.
-func (p *Module) URL() string {
-	return p.cfg.BaseURL()
+func (m *Module) URL() string {
+	return m.cfg.baseURL()
 }
 
 // SandboxEnv returns environment variables for the sandbox.
 // Returns ETHPANDAOPS_BLOCK_ARCHIVE_URL so the Python wrapper knows the
-// module is enabled. Network discovery happens server-side at call time.
-func (p *Module) SandboxEnv() (map[string]string, error) {
-	if !p.cfg.IsEnabled() {
-		return nil, nil
-	}
-
+// archive base URL. Network discovery happens server-side at call time.
+func (m *Module) SandboxEnv() (map[string]string, error) {
 	return map[string]string{
-		"ETHPANDAOPS_BLOCK_ARCHIVE_URL": p.cfg.BaseURL(),
+		"ETHPANDAOPS_BLOCK_ARCHIVE_URL": m.cfg.baseURL(),
 	}, nil
 }
 
 // DatasourceInfo returns empty since the block archive is a single hosted
 // service, not a per-network datasource.
-func (p *Module) DatasourceInfo() []types.DatasourceInfo {
+func (m *Module) DatasourceInfo() []types.DatasourceInfo {
 	return nil
 }
 
-func (p *Module) Examples() map[string]types.ExampleCategory {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
+func (m *Module) Examples() map[string]types.ExampleCategory {
 	result := make(map[string]types.ExampleCategory, len(queryExamples))
-	for k, v := range queryExamples {
-		result[k] = v
-	}
+	maps.Copy(result, queryExamples)
 
 	return result
 }
 
-func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
+func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	return map[string]types.ModuleDoc{
 		"block_archive": {
 			Description: "Fetch raw beacon blocks (SSZ or decoded JSON) by (network, slot, block_root) from the public block archive.",
@@ -126,11 +118,7 @@ func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	}
 }
 
-func (p *Module) GettingStartedSnippet() string {
-	if !p.cfg.IsEnabled() {
-		return ""
-	}
-
+func (m *Module) GettingStartedSnippet() string {
 	return `## Block Archive
 
 Fetch raw canonical beacon blocks by (network, slot, block_root). Source the
@@ -172,6 +160,6 @@ raw = block_archive.download_ssz("mainnet", slot, root)
 `
 }
 
-func (p *Module) Start(_ context.Context) error { return nil }
+func (m *Module) Start(_ context.Context) error { return nil }
 
-func (p *Module) Stop(_ context.Context) error { return nil }
+func (m *Module) Stop(_ context.Context) error { return nil }

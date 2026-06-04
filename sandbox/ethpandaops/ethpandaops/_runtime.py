@@ -22,12 +22,12 @@ def _check_api_config() -> None:
         )
 
 
-def _get_client() -> httpx.Client:
+def _get_client(write_timeout: float = 60.0) -> httpx.Client:
     _check_api_config()
     return httpx.Client(
         base_url=_API_URL,
         headers={"Authorization": f"Bearer {_API_TOKEN}"},
-        timeout=httpx.Timeout(connect=5.0, read=300.0, write=60.0, pool=5.0),
+        timeout=httpx.Timeout(connect=5.0, read=300.0, write=write_timeout, pool=5.0),
     )
 
 
@@ -49,7 +49,7 @@ def _invoke_bytes(
     return body, content_type
 
 
-def _decode_json(body: bytes, operation: str) -> Any:
+def _decode_json(body: bytes) -> Any:
     if not body.strip():
         return {}
 
@@ -64,7 +64,7 @@ def _decode_json(body: bytes, operation: str) -> Any:
 
 def invoke(operation: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     body, _ = _invoke_bytes(operation, args)
-    data = _decode_json(body, operation)
+    data = _decode_json(body)
 
     if not isinstance(data, dict) or "kind" not in data:
         raise ValueError(
@@ -77,7 +77,7 @@ def invoke(operation: str, args: dict[str, Any] | None = None) -> dict[str, Any]
 
 def invoke_json(operation: str, args: dict[str, Any] | None = None) -> Any:
     body, _ = _invoke_bytes(operation, args)
-    return _decode_json(body, operation)
+    return _decode_json(body)
 
 
 def invoke_json_data(operation: str, args: dict[str, Any] | None = None) -> Any:
@@ -123,13 +123,3 @@ def invoke_data(operation: str, args: dict[str, Any] | None = None) -> Any:
         raise ValueError(f"Operation {operation} did not return an object result")
 
     return response.get("data")
-
-
-def invoke_dataframe(operation: str, args: dict[str, Any] | None = None) -> pd.DataFrame:
-    return invoke_tsv_dataframe(operation, args)
-
-
-def invoke_raw_table(
-    operation: str, args: dict[str, Any] | None = None
-) -> tuple[list[tuple[str, ...]], list[str]]:
-    return invoke_tsv_rows(operation, args)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,6 +72,10 @@ type DockerBackend struct {
 	// securityConfigFunc returns the security configuration.
 	// This allows gVisor backend to override with gVisor-specific config.
 	securityConfigFunc SecurityConfigFunc
+
+	// verifyRuntimeFunc runs after the Docker client connects, allowing a backend
+	// to assert its required runtime is available. The default is a no-op.
+	verifyRuntimeFunc func(ctx context.Context) error
 }
 
 // NewDockerBackend creates a new Docker sandbox backend.
@@ -119,6 +124,13 @@ func (b *DockerBackend) Start(ctx context.Context) error {
 	}
 
 	b.client = dockerClient
+
+	// Verify the backend's required runtime is available (no-op for plain Docker).
+	if b.verifyRuntimeFunc != nil {
+		if err := b.verifyRuntimeFunc(ctx); err != nil {
+			return fmt.Errorf("verifying runtime: %w", err)
+		}
+	}
 
 	// Clean up expired orphaned containers from previous runs.
 	// Only removes containers older than max session duration to avoid
@@ -210,7 +222,11 @@ func (b *DockerBackend) Execute(ctx context.Context, req ExecuteRequest) (*Execu
 
 // executeEphemeral runs code in a new container that is destroyed after execution.
 func (b *DockerBackend) executeEphemeral(ctx context.Context, req ExecuteRequest) (*ExecutionResult, error) {
-	executionID := uuid.New().String()
+	executionID := req.ExecutionID
+	if executionID == "" {
+		executionID = uuid.New().String()
+	}
+
 	timeout := req.Timeout
 
 	if timeout == 0 {
@@ -247,7 +263,7 @@ func (b *DockerBackend) executeEphemeral(ctx context.Context, req ExecuteRequest
 		env = make(map[string]string)
 	}
 
-	env["ETHPANDAOPS_EXECUTION_ID"] = executionID
+	env[EnvExecutionID] = executionID
 
 	// Build container configuration.
 	containerConfig, hostConfig, err := b.buildContainerConfig(sharedDir, outputDir, env)
@@ -365,9 +381,17 @@ func (b *DockerBackend) executeWithNewSession(ctx context.Context, req ExecuteRe
 	b.sessionManager.markExecuting(sessionID)
 	defer b.sessionManager.unmarkExecuting(sessionID)
 
-	// Execute the code in the session.
-	result, err := b.execInContainer(ctx, session, req.Code, timeout, req.Env)
+	// Execute the code in the session. If the first execution fails the
+	// container has no persisted state worth keeping, so remove it rather
+	// than let a failed execution hold a session slot until TTL cleanup.
+	result, err := b.execInContainer(ctx, session, req.ExecutionID, req.Code, timeout, req.Env)
 	if err != nil {
+		if removeErr := b.forceRemoveContainer(context.Background(), containerID); removeErr != nil {
+			log.WithError(removeErr).Warn("Failed to remove session container after failed first execution")
+		}
+
+		b.sessionManager.removeSession(sessionID)
+
 		return nil, fmt.Errorf("executing in session: %w", err)
 	}
 
@@ -404,7 +428,7 @@ func (b *DockerBackend) executeInSession(ctx context.Context, req ExecuteRequest
 	defer b.sessionManager.unmarkExecuting(req.SessionID)
 
 	// Execute the code in the session.
-	result, err := b.execInContainer(ctx, session, req.Code, timeout, req.Env)
+	result, err := b.execInContainer(ctx, session, req.ExecutionID, req.Code, timeout, req.Env)
 	if err != nil {
 		return nil, fmt.Errorf("executing in session: %w", err)
 	}
@@ -502,7 +526,7 @@ func filterSessionEnv(env map[string]string) map[string]string {
 
 	filtered := make(map[string]string, len(env))
 	for k, v := range env {
-		if k == "ETHPANDAOPS_API_TOKEN" {
+		if k == EnvAPIToken {
 			continue
 		}
 		filtered[k] = v
@@ -538,11 +562,15 @@ func (b *DockerBackend) createSessionDirs(ctx context.Context, containerID strin
 func (b *DockerBackend) execInContainer(
 	ctx context.Context,
 	session *Session,
+	executionID string,
 	code string,
 	timeout time.Duration,
 	env map[string]string,
 ) (*ExecutionResult, error) {
-	executionID := uuid.New().String()
+	if executionID == "" {
+		executionID = uuid.New().String()
+	}
+
 	log := b.log.WithFields(logrus.Fields{
 		"execution_id": executionID,
 		"session_id":   session.ID,
@@ -571,8 +599,31 @@ func (b *DockerBackend) execInContainer(
 		return nil, fmt.Errorf("creating write exec: %w", err)
 	}
 
-	if err := b.client.ContainerExecStart(execCtx, writeResp.ID, container.ExecStartOptions{}); err != nil {
-		return nil, fmt.Errorf("starting write exec: %w", err)
+	// Attach so the write completes and its output is drained before we inspect it.
+	writeAttach, err := b.client.ContainerExecAttach(execCtx, writeResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("attaching to write exec: %w", err)
+	}
+
+	var writeStdout, writeStderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&writeStdout, &writeStderr, writeAttach.Reader); err != nil {
+		writeAttach.Close()
+		return nil, fmt.Errorf("reading write exec output: %w", err)
+	}
+
+	writeAttach.Close()
+
+	writeInspect, err := b.client.ContainerExecInspect(execCtx, writeResp.ID)
+	if err != nil {
+		return nil, fmt.Errorf("inspecting write exec: %w", err)
+	}
+
+	if writeInspect.ExitCode != 0 {
+		return nil, fmt.Errorf(
+			"failed to stage script (exit %d): %s",
+			writeInspect.ExitCode,
+			strings.TrimSpace(writeStderr.String()),
+		)
 	}
 
 	// Execute the script with ETHPANDAOPS_EXECUTION_ID env var for storage.upload().
@@ -580,12 +631,12 @@ func (b *DockerBackend) execInContainer(
 
 	execEnv := make([]string, 0, len(env)+1)
 	for k, v := range env {
-		if k == "ETHPANDAOPS_EXECUTION_ID" {
+		if k == EnvExecutionID {
 			continue
 		}
 		execEnv = append(execEnv, k+"="+v)
 	}
-	execEnv = append(execEnv, "ETHPANDAOPS_EXECUTION_ID="+executionID)
+	execEnv = append(execEnv, EnvExecutionID+"="+executionID)
 
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"python", scriptPath},
@@ -1186,9 +1237,6 @@ func (b *DockerBackend) cleanupExpiredContainers(ctx context.Context) error {
 	}
 
 	maxAge := b.cfg.Sessions.MaxDuration
-	if maxAge == 0 {
-		maxAge = 4 * time.Hour // Default max duration
-	}
 
 	now := time.Now()
 	var cleaned int

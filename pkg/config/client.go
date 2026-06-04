@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -37,13 +38,24 @@ func LoadClient(path string) (*ClientConfig, error) {
 		return nil, fmt.Errorf("substituting env vars: %w", err)
 	}
 
-	var cfg ClientConfig
-	if err := yaml.Unmarshal([]byte(substituted), &cfg); err != nil {
+	// Decode strictly into the full Config so typos in any section are caught,
+	// then project the Server and Proxy subsets the client needs.
+	var full Config
+	decoder := yaml.NewDecoder(bytes.NewReader([]byte(substituted)))
+	decoder.KnownFields(true)
+
+	if err := decoder.Decode(&full); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
-	if err := rejectSingularAndPluralProxies(cfg.Proxy, cfg.Proxies); err != nil {
+	if err := rejectSingularAndPluralProxies(full.Proxy, full.Proxies); err != nil {
 		return nil, err
+	}
+
+	cfg := ClientConfig{
+		Server:  full.Server,
+		Proxy:   full.Proxy,
+		Proxies: full.Proxies,
 	}
 
 	cfg.applyDefaults()
@@ -78,13 +90,9 @@ func (c *ClientConfig) ServerURL() string {
 		host = "localhost"
 	}
 
-	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
-		host = "[" + host + "]"
-	}
-
 	port := c.Server.Port
 	if port == 0 {
-		port = 2480
+		port = defaultServerPort
 	}
 
 	return fmt.Sprintf("http://%s", net.JoinHostPort(host, fmt.Sprintf("%d", port)))
@@ -97,7 +105,7 @@ func (c *ClientConfig) Path() string {
 
 func (c *ClientConfig) applyDefaults() {
 	if c.Server.Port == 0 {
-		c.Server.Port = 2480
+		c.Server.Port = defaultServerPort
 	}
 
 	normalizeProxyConfigs(&c.Proxy, &c.Proxies, "")

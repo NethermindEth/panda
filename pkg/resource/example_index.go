@@ -161,14 +161,3 @@ func (idx *ExampleIndex) Search(query string, limit int) ([]SearchResult, error)
 func (idx *ExampleIndex) Close() error {
 	return idx.embedder.Close()
 }
-
-// dotProduct computes the dot product of two vectors.
-// For L2-normalized vectors this equals cosine similarity.
-func dotProduct(a, b []float32) float64 {
-	var sum float64
-	for i := range a {
-		sum += float64(a[i]) * float64(b[i])
-	}
-
-	return sum
-}

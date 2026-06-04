@@ -3,7 +3,6 @@ package execsvc
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"time"
 
@@ -77,7 +76,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*sandbox.Exe
 
 	executionID := uuid.New().String()
 	runtimeToken := s.runtimeTokens.Register(executionID)
-	env["ETHPANDAOPS_API_TOKEN"] = runtimeToken
+	env[sandbox.EnvAPIToken] = runtimeToken
 	defer s.runtimeTokens.Revoke(executionID)
 
 	if req.SessionID == "" && s.sandboxSvc.SessionsEnabled() {
@@ -92,11 +91,12 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*sandbox.Exe
 	}
 
 	return s.sandboxSvc.Execute(ctx, sandbox.ExecuteRequest{
-		Code:      req.Code,
-		Env:       env,
-		Timeout:   time.Duration(timeout) * time.Second,
-		SessionID: req.SessionID,
-		OwnerID:   req.OwnerID,
+		Code:        req.Code,
+		ExecutionID: executionID,
+		Env:         env,
+		Timeout:     time.Duration(timeout) * time.Second,
+		SessionID:   req.SessionID,
+		OwnerID:     req.OwnerID,
 	})
 }
 
@@ -145,7 +145,7 @@ func (s *Service) BuildSandboxEnv() (map[string]string, error) {
 		return nil, fmt.Errorf("server.sandbox_url or server.base_url is required for sandbox API access")
 	}
 
-	env["ETHPANDAOPS_API_URL"] = apiURL
+	env[sandbox.EnvAPIURL] = apiURL
 
 	return env, nil
 }
@@ -168,19 +168,13 @@ func sandboxAPIURL(cfg *config.Config) string {
 	}
 
 	// Auto-detect a sandbox-reachable URL when nothing is configured.
-	// On macOS/Windows, Docker Desktop provides host.docker.internal.
-	// On Linux, containers on a user-defined bridge can reach the host
-	// via host.docker.internal (Docker 20.10+) as well.
+	// Docker Desktop (macOS/Windows) and Docker 20.10+ user-defined bridge
+	// networks (Linux, via --add-host) both expose the host as
+	// host.docker.internal, so it is a reasonable cross-platform default.
 	port := cfg.Server.Port
 	if port == 0 {
 		port = 2480
 	}
 
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		return fmt.Sprintf("http://host.docker.internal:%d", port)
-	}
-
-	// Linux: host.docker.internal works with --add-host or Docker 20.10+
-	// user-defined bridge networks. Use it as a reasonable default.
 	return fmt.Sprintf("http://host.docker.internal:%d", port)
 }

@@ -13,11 +13,8 @@ import (
 
 	dockercontainer "github.com/docker/docker/api/types/container"
 	dockerfilters "github.com/docker/docker/api/types/filters"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 
-	authclient "github.com/ethpandaops/panda/pkg/auth/client"
-	authstore "github.com/ethpandaops/panda/pkg/auth/store"
 	"github.com/ethpandaops/panda/pkg/config"
 	"github.com/ethpandaops/panda/pkg/configpath"
 	"github.com/ethpandaops/panda/pkg/sandbox"
@@ -380,18 +377,8 @@ func printAuthStatus() {
 		return
 	}
 
-	client := authclient.New(log, authclient.Config{
-		IssuerURL: target.issuerURL,
-		ClientID:  target.clientID,
-		Resource:  target.resource,
-	})
-
-	store := authstore.New(log, authstore.Config{
-		AuthClient: client,
-		IssuerURL:  target.issuerURL,
-		ClientID:   target.clientID,
-		Resource:   target.resource,
-	})
+	client := newAuthClient(target, false)
+	store := newAuthStore(target, client)
 
 	if store.IsAuthenticated() {
 		fmt.Println("Auth: Authenticated")
@@ -448,10 +435,7 @@ func cleanupSandboxContainers() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cli, err := dockerclient.NewClientWithOpts(
-		dockerclient.FromEnv,
-		dockerclient.WithAPIVersionNegotiation(),
-	)
+	cli, err := newDockerClient()
 	if err != nil {
 		return
 	}

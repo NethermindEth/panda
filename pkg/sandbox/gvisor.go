@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/docker/docker/api/types/system"
-	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ethpandaops/panda/pkg/config"
@@ -34,55 +33,19 @@ func NewGVisorBackend(cfg config.SandboxConfig, log logrus.FieldLogger) (*GVisor
 	// Use gVisor security config which sets the runsc runtime.
 	dockerBackend.securityConfigFunc = GVisorSecurityConfig
 
-	return &GVisorBackend{
+	backend := &GVisorBackend{
 		DockerBackend: dockerBackend,
-	}, nil
+	}
+
+	// Assert the gVisor runtime is available during the shared Start sequence.
+	dockerBackend.verifyRuntimeFunc = backend.verifyGVisorRuntime
+
+	return backend, nil
 }
 
 // Name returns the backend name.
 func (b *GVisorBackend) Name() string {
 	return "gvisor"
-}
-
-// Start initializes the Docker client and verifies gVisor runtime is available.
-func (b *GVisorBackend) Start(ctx context.Context) error {
-	b.log.Info("Starting gVisor sandbox backend")
-
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("creating docker client: %w", err)
-	}
-
-	// Verify Docker is accessible.
-	if _, err := dockerClient.Ping(ctx); err != nil {
-		return fmt.Errorf("connecting to docker daemon: %w", err)
-	}
-
-	b.client = dockerClient
-
-	// Verify gVisor runtime is available.
-	if err := b.verifyGVisorRuntime(ctx); err != nil {
-		return fmt.Errorf("verifying gvisor runtime: %w", err)
-	}
-
-	// Ensure the sandbox image is available.
-	if err := b.ensureImage(ctx); err != nil {
-		return fmt.Errorf("ensuring sandbox image: %w", err)
-	}
-
-	// Ensure the configured network exists (auto-creates if missing).
-	if err := b.ensureNetwork(ctx); err != nil {
-		return fmt.Errorf("ensuring sandbox network: %w", err)
-	}
-
-	// Start session manager if enabled.
-	if err := b.sessionManager.Start(ctx); err != nil {
-		return fmt.Errorf("starting session manager: %w", err)
-	}
-
-	b.log.WithField("image", b.cfg.Image).Info("gVisor sandbox backend started")
-
-	return nil
 }
 
 // verifyGVisorRuntime checks that the gVisor (runsc) runtime is available.

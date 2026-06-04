@@ -49,8 +49,8 @@ const (
 	schemaQueryConcurrency = 5
 )
 
-// ClickHouseSchemaConfig holds configuration for schema discovery.
-type ClickHouseSchemaConfig struct {
+// SchemaConfig holds configuration for schema discovery.
+type SchemaConfig struct {
 	RefreshInterval time.Duration
 	QueryTimeout    time.Duration
 	Datasources     []SchemaDiscoveryDatasource
@@ -92,11 +92,10 @@ func tableKey(database, name string) string {
 	return database + "." + name
 }
 
-// ClickHouseSchemaClient fetches and caches ClickHouse schema information.
-type ClickHouseSchemaClient interface {
+// SchemaClient fetches and caches ClickHouse schema information.
+type SchemaClient interface {
 	Start(ctx context.Context) error
 	Stop() error
-	WaitForReady(ctx context.Context) error
 	GetAllTables() map[string]*ClusterTables
 	GetClusterTables(clusterName string) (*ClusterTables, bool)
 	GetTableInCluster(clusterName, database, tableName string) (*TableSchema, bool)
@@ -104,11 +103,11 @@ type ClickHouseSchemaClient interface {
 }
 
 // Compile-time interface compliance check.
-var _ ClickHouseSchemaClient = (*clickhouseSchemaClient)(nil)
+var _ SchemaClient = (*clickhouseSchemaClient)(nil)
 
 type clickhouseSchemaClient struct {
 	log      logrus.FieldLogger
-	cfg      ClickHouseSchemaConfig
+	cfg      SchemaConfig
 	proxySvc proxy.Service
 
 	mu       sync.RWMutex
@@ -118,19 +117,18 @@ type clickhouseSchemaClient struct {
 	datasources map[string]string // cluster name -> datasource name
 
 	done       chan struct{}
-	ready      chan struct{} // closed when initial fetch completes
 	refreshNow chan struct{} // capacity 1; coalesces on-demand refresh signals
 	wg         sync.WaitGroup
 
 	httpClient *http.Client
 }
 
-// NewClickHouseSchemaClient creates a new schema discovery client.
-func NewClickHouseSchemaClient(
+// NewSchemaClient creates a new schema discovery client.
+func NewSchemaClient(
 	log logrus.FieldLogger,
-	cfg ClickHouseSchemaConfig,
+	cfg SchemaConfig,
 	proxySvc proxy.Service,
-) ClickHouseSchemaClient {
+) SchemaClient {
 	if cfg.RefreshInterval == 0 {
 		cfg.RefreshInterval = DefaultSchemaRefreshInterval
 	}
@@ -146,7 +144,6 @@ func NewClickHouseSchemaClient(
 		clusters:    make(map[string]*ClusterTables, 2),
 		datasources: make(map[string]string, 2),
 		done:        make(chan struct{}),
-		ready:       make(chan struct{}),
 		refreshNow:  make(chan struct{}, 1),
 		httpClient:  &http.Client{},
 	}
@@ -226,7 +223,6 @@ func (c *clickhouseSchemaClient) Start(ctx context.Context) error {
 
 	go func() {
 		defer c.wg.Done()
-		defer close(c.ready)
 
 		fetchCtx, cancel := context.WithTimeout(context.Background(), c.cfg.QueryTimeout*10)
 		defer cancel()
@@ -319,16 +315,6 @@ func (c *clickhouseSchemaClient) Stop() error {
 	c.log.Info("ClickHouse schema client stopped")
 
 	return nil
-}
-
-// WaitForReady blocks until the initial schema fetch completes or ctx is cancelled.
-func (c *clickhouseSchemaClient) WaitForReady(ctx context.Context) error {
-	select {
-	case <-c.ready:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // GetAllTables returns all tables across all clusters.

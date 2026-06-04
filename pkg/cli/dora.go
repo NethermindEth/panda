@@ -119,7 +119,7 @@ var doraOverviewCmd = &cobra.Command{
 
 var doraValidatorCmd = &cobra.Command{
 	Use:   "validator <network> <index-or-pubkey>",
-	Short: "Get validator details",
+	Short: "Get validator details (always JSON)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		response, err := runServerOperationRaw("dora.get_validator", map[string]any{
@@ -136,7 +136,7 @@ var doraValidatorCmd = &cobra.Command{
 
 var doraSlotCmd = &cobra.Command{
 	Use:   "slot <network> <slot-or-hash>",
-	Short: "Get slot details",
+	Short: "Get slot details (always JSON)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		response, err := runServerOperationRaw("dora.get_slot", map[string]any{
@@ -153,7 +153,7 @@ var doraSlotCmd = &cobra.Command{
 
 var doraEpochCmd = &cobra.Command{
 	Use:   "epoch <network> <epoch>",
-	Short: "Get epoch summary",
+	Short: "Get epoch summary (always JSON)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		response, err := runServerOperationRaw("dora.get_epoch", map[string]any{

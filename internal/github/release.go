@@ -10,6 +10,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/ethpandaops/panda/internal/githubapi"
+	"github.com/ethpandaops/panda/internal/version"
 )
 
 const (
@@ -48,7 +51,8 @@ func NewReleaseChecker(owner, repo string) *ReleaseChecker {
 		owner: owner,
 		repo:  repo,
 		httpClient: &http.Client{
-			Timeout: apiTimeout,
+			Timeout:   apiTimeout,
+			Transport: &version.Transport{},
 		},
 	}
 }
@@ -66,6 +70,10 @@ func (r *ReleaseChecker) LatestRelease(ctx context.Context) (*Release, error) {
 	}
 
 	req.Header.Set("Accept", "application/vnd.github+json")
+
+	if token := githubapi.Token(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {

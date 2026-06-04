@@ -2,27 +2,35 @@ package ethnode
 
 import (
 	"context"
-
-	"gopkg.in/yaml.v3"
+	"maps"
 
 	"github.com/ethpandaops/panda/pkg/module"
 	"github.com/ethpandaops/panda/pkg/types"
 )
 
+// Compile-time interface checks.
+var (
+	_ module.Module                        = (*Module)(nil)
+	_ module.ProxyDiscoverable             = (*Module)(nil)
+	_ module.SandboxEnvProvider            = (*Module)(nil)
+	_ module.DatasourceInfoProvider        = (*Module)(nil)
+	_ module.ExamplesProvider              = (*Module)(nil)
+	_ module.PythonAPIDocsProvider         = (*Module)(nil)
+	_ module.GettingStartedSnippetProvider = (*Module)(nil)
+)
+
 // Module implements the module.Module interface for direct Ethereum node API access.
-type Module struct {
-	cfg Config
-}
+type Module struct{}
 
 // New creates a new ethnode module.
 func New() *Module {
 	return &Module{}
 }
 
-func (p *Module) Name() string { return "ethnode" }
+func (m *Module) Name() string { return "ethnode" }
 
 // InitFromDiscovery enables the module if an ethnode datasource exists.
-func (p *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
+func (m *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 	for _, ds := range datasources {
 		if ds.Type == "ethnode" {
 			return nil // module defaults to enabled
@@ -32,57 +40,34 @@ func (p *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 	return module.ErrNoValidConfig
 }
 
-// Enabled reports whether ethnode operations should be exposed.
-func (p *Module) Enabled() bool { return p.cfg.IsEnabled() }
+func (m *Module) Init(_ []byte) error { return nil }
 
-func (p *Module) Init(rawConfig []byte) error {
-	if len(rawConfig) == 0 {
-		return nil
-	}
+func (m *Module) ApplyDefaults() {}
 
-	return yaml.Unmarshal(rawConfig, &p.cfg)
-}
-
-func (p *Module) ApplyDefaults() {}
-
-func (p *Module) Validate() error { return nil }
+func (m *Module) Validate() error { return nil }
 
 // SandboxEnv returns environment variables for the sandbox.
-func (p *Module) SandboxEnv() (map[string]string, error) {
-	if !p.cfg.IsEnabled() {
-		return nil, nil
-	}
-
+func (m *Module) SandboxEnv() (map[string]string, error) {
 	return map[string]string{
 		"ETHPANDAOPS_ETHNODE_AVAILABLE": "true",
 	}, nil
 }
 
 // DatasourceInfo returns empty since ethnode is a pass-through proxy, not a named datasource.
-func (p *Module) DatasourceInfo() []types.DatasourceInfo {
+func (m *Module) DatasourceInfo() []types.DatasourceInfo {
 	return nil
 }
 
 // Examples returns query examples for ethnode.
-func (p *Module) Examples() map[string]types.ExampleCategory {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
+func (m *Module) Examples() map[string]types.ExampleCategory {
 	result := make(map[string]types.ExampleCategory, len(queryExamples))
-	for k, v := range queryExamples {
-		result[k] = v
-	}
+	maps.Copy(result, queryExamples)
 
 	return result
 }
 
 // PythonAPIDocs returns API documentation for the ethnode Python module.
-func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
+func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	return map[string]types.ModuleDoc{
 		"ethnode": {
 			Description: "Direct access to Ethereum beacon and execution node APIs",
@@ -115,11 +100,7 @@ func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 }
 
 // GettingStartedSnippet returns a Markdown snippet for the getting-started resource.
-func (p *Module) GettingStartedSnippet() string {
-	if !p.cfg.IsEnabled() {
-		return ""
-	}
-
+func (m *Module) GettingStartedSnippet() string {
 	return `## Ethereum Node API (Direct Access)
 
 Query individual beacon and execution nodes directly. Useful for checking sync status,
@@ -148,6 +129,6 @@ identity = ethnode.beacon_get("my-devnet", "lighthouse-geth-1", "/eth/v1/node/id
 `
 }
 
-func (p *Module) Start(_ context.Context) error { return nil }
+func (m *Module) Start(_ context.Context) error { return nil }
 
-func (p *Module) Stop(_ context.Context) error { return nil }
+func (m *Module) Stop(_ context.Context) error { return nil }

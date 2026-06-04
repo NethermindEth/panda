@@ -129,17 +129,18 @@ type issuedCode struct {
 
 // deviceAuth stores a pending device authorization request (RFC 8628).
 type deviceAuth struct {
-	DeviceCode  string
-	UserCode    string
-	ClientID    string
-	Resource    string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	Authorized  bool
-	GitHubLogin string
-	GitHubID    int64
-	GitHubToken string
-	Orgs        []string
+	DeviceCode   string
+	UserCode     string
+	ClientID     string
+	Resource     string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	LastPolledAt time.Time
+	Authorized   bool
+	GitHubLogin  string
+	GitHubID     int64
+	GitHubToken  string
+	Orgs         []string
 }
 
 type refreshSession struct {
@@ -746,8 +747,6 @@ func (s *simpleService) handleAuthorizationCodeGrant(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Validate all parameters before marking as used to prevent DoS attacks
-	// where an attacker could burn a stolen code with invalid parameters.
 	if issued.ClientID != clientID || issued.RedirectURI != redirectURI || issued.Resource != resource {
 		s.codesMu.Unlock()
 		s.writeError(w, http.StatusBadRequest, "invalid_grant", "parameter mismatch")
@@ -1083,6 +1082,21 @@ func (s *simpleService) handleDeviceTokenGrant(w http.ResponseWriter, r *http.Re
 	}
 
 	if !dev.Authorized {
+		now := time.Now()
+
+		// RFC 8628 section 3.5: clients polling faster than the advertised
+		// interval are told to back off via slow_down.
+		tooFast := !dev.LastPolledAt.IsZero() &&
+			now.Sub(dev.LastPolledAt) < devicePollInterval*time.Second
+		dev.LastPolledAt = now
+
+		if tooFast {
+			s.devicesMu.Unlock()
+			s.writeError(w, http.StatusBadRequest, "slow_down", "polling too frequently")
+
+			return
+		}
+
 		s.devicesMu.Unlock()
 		s.writeError(w, http.StatusBadRequest, "authorization_pending", "waiting for user to authorize")
 

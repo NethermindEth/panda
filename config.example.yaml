@@ -1,6 +1,6 @@
 # ethpandaops Panda Server Configuration
 # Copy this file to config.yaml and customize for your environment.
-# Environment variables can be substituted using ${VAR_NAME} syntax.
+# Environment variables can be substituted using ${VAR_NAME} or ${VAR_NAME:-default} syntax.
 
 server:
   host: "0.0.0.0"
@@ -74,4 +74,4 @@ proxies:
 # Observability configuration
 observability:
   metrics_enabled: true
-  metrics_port: 31490
+  metrics_port: 2490  # in-container bind port; docker-compose publishes it on the host via MCP_METRICS_PORT

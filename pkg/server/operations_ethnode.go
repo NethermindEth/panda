@@ -66,13 +66,13 @@ func (s *service) handleEthNodeOperation(operationID string, w http.ResponseWrit
 func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, path, err := parseEthNodeBeaconArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -86,7 +86,7 @@ func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request)
 		nil,
 	)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -96,13 +96,13 @@ func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request)
 func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, path, err := parseEthNodeBeaconArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -116,7 +116,7 @@ func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request
 		req.Args["body"],
 	)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -126,25 +126,25 @@ func (s *service) handleEthNodeBeaconPost(w http.ResponseWriter, r *http.Request
 func (s *service) handleEthNodeExecutionRPC(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	method, err := requiredStringArg(req.Args, "method")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	body, contentType, status, err := s.ethNodeExecutionRPCRaw(r.Context(), network, instance, method, optionalSliceArg(req.Args, "params"))
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -154,19 +154,19 @@ func (s *service) handleEthNodeExecutionRPC(w http.ResponseWriter, r *http.Reque
 func (s *service) handleEthNodeCuratedBeaconGet(w http.ResponseWriter, r *http.Request, path string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	data, status, err := s.ethNodeBeaconRequest(r.Context(), http.MethodGet, network, instance, path, nil, nil)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -184,7 +184,7 @@ func (s *service) handleEthNodeCuratedBeaconGet(w http.ResponseWriter, r *http.R
 func (s *service) handleEthNodeBeaconHeaders(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -199,7 +199,7 @@ func (s *service) handleEthNodeBeaconHeaders(w http.ResponseWriter, r *http.Requ
 func (s *service) handleEthNodeFinalityCheckpoints(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -214,13 +214,13 @@ func (s *service) handleEthNodeFinalityCheckpoints(w http.ResponseWriter, r *htt
 func (s *service) handleEthNodeCuratedBeaconPath(w http.ResponseWriter, r *http.Request, req operations.Request, path string) {
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	data, status, err := s.ethNodeBeaconRequest(r.Context(), http.MethodGet, network, instance, path, nil, nil)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -238,19 +238,19 @@ func (s *service) handleEthNodeCuratedBeaconPath(w http.ResponseWriter, r *http.
 func (s *service) handleEthNodeHealth(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	statusCode, status, err := s.ethNodeBeaconHealthRequest(r.Context(), network, instance)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -267,31 +267,31 @@ func (s *service) handleEthNodeHealth(w http.ResponseWriter, r *http.Request) {
 func (s *service) handleEthNodeHexRPC(w http.ResponseWriter, r *http.Request, method, field string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	result, status, err := s.ethNodeExecutionRPC(r.Context(), network, instance, method, nil)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
 	hexValue, ok := result.(string)
 	if !ok {
-		http.Error(w, "unexpected JSON-RPC result shape", http.StatusBadGateway)
+		writeAPIError(w, http.StatusBadGateway, "unexpected JSON-RPC result shape")
 		return
 	}
 
 	parsedValue, err := parseHexUint64(hexValue)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeAPIError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 
@@ -312,19 +312,19 @@ func (s *service) handleEthNodeHexRPC(w http.ResponseWriter, r *http.Request, me
 func (s *service) handleEthNodeExecutionRPCMethod(w http.ResponseWriter, r *http.Request, method string) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	result, status, err := s.ethNodeExecutionRPC(r.Context(), network, instance, method, nil)
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 
@@ -342,13 +342,13 @@ func (s *service) handleEthNodeExecutionRPCMethod(w http.ResponseWriter, r *http
 func (s *service) handleEthNodeGetBlockByNumber(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	network, instance, err := parseEthNodeNodeArgs(req.Args)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -361,7 +361,7 @@ func (s *service) handleEthNodeGetBlockByNumber(w http.ResponseWriter, r *http.R
 
 	result, status, err := s.ethNodeExecutionRPC(r.Context(), network, instance, "eth_getBlockByNumber", []any{block, fullTx})
 	if err != nil {
-		http.Error(w, err.Error(), status)
+		writeAPIError(w, status, err.Error())
 		return
 	}
 

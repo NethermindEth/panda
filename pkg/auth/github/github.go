@@ -113,7 +113,6 @@ func (c *Client) ExchangeCode(ctx context.Context, code, redirectURI string) (*T
 	if resp.StatusCode != http.StatusOK {
 		c.log.WithFields(logrus.Fields{
 			"status_code": resp.StatusCode,
-			"response":    string(body),
 		}).Error("GitHub token exchange failed")
 
 		return nil, fmt.Errorf("%w: status %d", ErrGitHubOAuth, resp.StatusCode)
@@ -194,7 +193,6 @@ func (c *Client) getUserProfile(ctx context.Context, accessToken string) (*githu
 	if resp.StatusCode != http.StatusOK {
 		c.log.WithFields(logrus.Fields{
 			"status_code": resp.StatusCode,
-			"response":    string(body),
 		}).Error("GitHub user API failed")
 
 		return nil, fmt.Errorf("%w: status %d", ErrGitHubAPI, resp.StatusCode)

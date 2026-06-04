@@ -21,16 +21,13 @@ import httpx
 
 from ethpandaops import _runtime
 
+# Larger write timeout than the runtime default to accommodate large file uploads.
+_UPLOAD_WRITE_TIMEOUT = 300.0
+
 
 def _get_client() -> httpx.Client:
     """Get an HTTP client configured for the local server API."""
-    _runtime._check_api_config()
-
-    return httpx.Client(
-        base_url=_runtime._API_URL,
-        headers={"Authorization": f"Bearer {_runtime._API_TOKEN}"},
-        timeout=httpx.Timeout(connect=5.0, read=300.0, write=300.0, pool=5.0),
-    )
+    return _runtime._get_client(write_timeout=_UPLOAD_WRITE_TIMEOUT)
 
 
 def upload(local_path: str, remote_name: str | None = None) -> str:

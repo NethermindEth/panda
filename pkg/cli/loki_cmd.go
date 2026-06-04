@@ -47,12 +47,12 @@ func init() {
 	lokiQueryInstantCmd.Flags().StringVar(&lokiDirection, "direction", "backward", "Sort direction: forward or backward")
 
 	lokiCmd.AddCommand(lokiLabelsCmd)
-	lokiLabelsCmd.Flags().StringVar(&lokiStart, "start", "", "Start time")
-	lokiLabelsCmd.Flags().StringVar(&lokiEnd, "end", "", "End time")
+	lokiLabelsCmd.Flags().StringVar(&lokiStart, "start", "", "Start time (RFC3339, unix, or 'now-1h')")
+	lokiLabelsCmd.Flags().StringVar(&lokiEnd, "end", "", "End time (RFC3339, unix, or 'now')")
 
 	lokiCmd.AddCommand(lokiLabelValuesCmd)
-	lokiLabelValuesCmd.Flags().StringVar(&lokiStart, "start", "", "Start time")
-	lokiLabelValuesCmd.Flags().StringVar(&lokiEnd, "end", "", "End time")
+	lokiLabelValuesCmd.Flags().StringVar(&lokiStart, "start", "", "Start time (RFC3339, unix, or 'now-1h')")
+	lokiLabelValuesCmd.Flags().StringVar(&lokiEnd, "end", "", "End time (RFC3339, unix, or 'now')")
 
 	lokiQueryCmd.ValidArgsFunction = completeDatasourceNames("loki")
 	lokiQueryInstantCmd.ValidArgsFunction = completeDatasourceNames("loki")

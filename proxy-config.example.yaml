@@ -6,6 +6,8 @@
 #   Production: Deploy as a K8s service
 #
 # The MCP server connects to this proxy via its 'proxy.url' config.
+#
+# Environment variables can be substituted using ${VAR_NAME} or ${VAR_NAME:-default} syntax.
 
 server:
   # Address to listen on
@@ -137,9 +139,14 @@ loki:
 # embedding:
 #   api_key: "${OPENROUTER_API_KEY}"
 #   model: "openai/text-embedding-3-small"
+#   api_url: "https://openrouter.ai/api/v1"  # base URL of the embedding API
 #   cache:
 #     backend: memory  # or "redis"
 #     # redis_url: "redis://localhost:6379"
+
+# GitHub API (optional — enables triggering GitHub Actions workflows)
+# github:
+#   token: "${GITHUB_TOKEN}"  # PAT or app token with actions:write permission
 
 # Rate limiting
 rate_limiting:

@@ -4,16 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"gopkg.in/yaml.v3"
+	"maps"
 
 	"github.com/ethpandaops/panda/pkg/cartographoor"
+	"github.com/ethpandaops/panda/pkg/module"
 	"github.com/ethpandaops/panda/pkg/types"
+)
+
+// Compile-time interface checks.
+var (
+	_ module.Module                        = (*Module)(nil)
+	_ module.DefaultEnabled                = (*Module)(nil)
+	_ module.CartographoorAware            = (*Module)(nil)
+	_ module.SandboxEnvProvider            = (*Module)(nil)
+	_ module.DatasourceInfoProvider        = (*Module)(nil)
+	_ module.ExamplesProvider              = (*Module)(nil)
+	_ module.PythonAPIDocsProvider         = (*Module)(nil)
+	_ module.GettingStartedSnippetProvider = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for the Dora module.
 type Module struct {
-	cfg                 Config
 	cartographoorClient cartographoor.CartographoorClient
 }
 
@@ -22,48 +33,29 @@ func New() *Module {
 	return &Module{}
 }
 
-func (p *Module) Name() string { return "dora" }
-
-// Enabled reports whether Dora operations should be exposed.
-func (p *Module) Enabled() bool { return p.cfg.IsEnabled() }
+func (m *Module) Name() string { return "dora" }
 
 // DefaultEnabled implements module.DefaultEnabled.
 // Dora is enabled by default since it requires no configuration.
-func (p *Module) DefaultEnabled() bool { return true }
+func (m *Module) DefaultEnabled() bool { return true }
 
-func (p *Module) Init(rawConfig []byte) error {
-	if len(rawConfig) == 0 {
-		// No config provided, use defaults (enabled = true).
-		return nil
-	}
+func (m *Module) Init(_ []byte) error { return nil }
 
-	return yaml.Unmarshal(rawConfig, &p.cfg)
-}
+func (m *Module) ApplyDefaults() {}
 
-func (p *Module) ApplyDefaults() {
-	// Defaults are handled by Config.IsEnabled().
-}
-
-func (p *Module) Validate() error {
-	// No validation needed - config is minimal.
+func (m *Module) Validate() error {
 	return nil
 }
 
 // SandboxEnv returns environment variables for the sandbox.
 // Returns ETHPANDAOPS_DORA_NETWORKS with network->URL mapping from cartographoor.
-func (p *Module) SandboxEnv() (map[string]string, error) {
-	if !p.cfg.IsEnabled() {
-		return nil, nil
-	}
-
-	if p.cartographoorClient == nil {
-		// Cartographoor client not yet set - return empty.
-		// This will be populated after SetCartographoorClient is called.
+func (m *Module) SandboxEnv() (map[string]string, error) {
+	if m.cartographoorClient == nil {
 		return nil, nil
 	}
 
 	// Build network -> Dora URL mapping from cartographoor data.
-	networks := p.cartographoorClient.GetActiveNetworks()
+	networks := m.cartographoorClient.GetActiveNetworks()
 	doraNetworks := make(map[string]string, len(networks))
 
 	for name, network := range networks {
@@ -88,28 +80,18 @@ func (p *Module) SandboxEnv() (map[string]string, error) {
 
 // DatasourceInfo returns empty since networks are the datasources,
 // and those come from cartographoor.
-func (p *Module) DatasourceInfo() []types.DatasourceInfo {
+func (m *Module) DatasourceInfo() []types.DatasourceInfo {
 	return nil
 }
 
-func (p *Module) Examples() map[string]types.ExampleCategory {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
+func (m *Module) Examples() map[string]types.ExampleCategory {
 	result := make(map[string]types.ExampleCategory, len(queryExamples))
-	for k, v := range queryExamples {
-		result[k] = v
-	}
+	maps.Copy(result, queryExamples)
 
 	return result
 }
 
-func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
-	if !p.cfg.IsEnabled() {
-		return nil
-	}
-
+func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	return map[string]types.ModuleDoc{
 		"dora": {
 			Description: "Query Dora beacon chain explorer and generate deep links",
@@ -131,11 +113,7 @@ func (p *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	}
 }
 
-func (p *Module) GettingStartedSnippet() string {
-	if !p.cfg.IsEnabled() {
-		return ""
-	}
-
+func (m *Module) GettingStartedSnippet() string {
 	return `## Dora Beacon Chain Explorer
 
 Query the Dora beacon chain explorer for network status, validators, and slots.
@@ -161,10 +139,10 @@ print(f"View in Dora: {link}")
 
 // SetCartographoorClient implements module.CartographoorAware.
 // This is called by the builder to inject the cartographoor client.
-func (p *Module) SetCartographoorClient(client cartographoor.CartographoorClient) {
-	p.cartographoorClient = client
+func (m *Module) SetCartographoorClient(client cartographoor.CartographoorClient) {
+	m.cartographoorClient = client
 }
 
-func (p *Module) Start(_ context.Context) error { return nil }
+func (m *Module) Start(_ context.Context) error { return nil }
 
-func (p *Module) Stop(_ context.Context) error { return nil }
+func (m *Module) Stop(_ context.Context) error { return nil }

@@ -64,7 +64,7 @@ Examples:
 
 var clickhouseQueryRawCmd = &cobra.Command{
 	Use:   "query-raw <cluster> <sql>",
-	Short: "Execute a SQL query and return raw rows",
+	Short: "Execute a SQL query and return raw rows (always JSON)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		return runClickHouseOperation("clickhouse.query_raw", args[0], args[1], true)

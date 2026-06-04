@@ -40,6 +40,9 @@ type service struct {
 	baseURL string
 }
 
+// Compile-time interface check.
+var _ Service = (*service)(nil)
+
 // New creates a new storage service.
 //
 // fs is the filesystem implementation (afero.OsFs for production, afero.MemMapFs for tests).

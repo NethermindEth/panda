@@ -47,19 +47,19 @@ func (s *service) handlePrometheusListDatasources(w http.ResponseWriter) {
 func (s *service) handlePrometheusQuery(w http.ResponseWriter, r *http.Request, rangeQuery bool) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	queryText, err := requiredStringArg(req.Args, "query")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -70,25 +70,25 @@ func (s *service) handlePrometheusQuery(w http.ResponseWriter, r *http.Request, 
 	if rangeQuery {
 		start, err := parsePrometheusTime(optionalStringArg(req.Args, "start"), now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
 		end, err := parsePrometheusTime(optionalStringArg(req.Args, "end"), now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
 		stepValue, err := requiredStringArg(req.Args, "step")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
 		step, err := parseDurationSeconds(stepValue)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -99,7 +99,7 @@ func (s *service) handlePrometheusQuery(w http.ResponseWriter, r *http.Request, 
 	} else if queryTime := optionalStringArg(req.Args, "time"); queryTime != "" {
 		parsedTime, err := parsePrometheusTime(queryTime, now)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -112,13 +112,13 @@ func (s *service) handlePrometheusQuery(w http.ResponseWriter, r *http.Request, 
 func (s *service) handlePrometheusLabels(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -128,19 +128,19 @@ func (s *service) handlePrometheusLabels(w http.ResponseWriter, r *http.Request)
 func (s *service) handlePrometheusLabelValues(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeOperationRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	label, err := requiredStringArg(req.Args, "label")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

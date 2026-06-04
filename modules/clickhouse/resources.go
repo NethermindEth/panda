@@ -49,7 +49,7 @@ type TableDetailResponse struct {
 func RegisterSchemaResources(
 	log logrus.FieldLogger,
 	reg module.ResourceRegistry,
-	client ClickHouseSchemaClient,
+	client SchemaClient,
 ) {
 	log = log.WithField("resource", "clickhouse_schema")
 
@@ -103,7 +103,7 @@ func RegisterSchemaResources(
 	log.Debug("Registered ClickHouse schema resources")
 }
 
-func createTablesListHandler(client ClickHouseSchemaClient) types.ReadHandler {
+func createTablesListHandler(client SchemaClient) types.ReadHandler {
 	return func(_ context.Context, _ string) (string, error) {
 		allTables := client.GetAllTables()
 
@@ -121,7 +121,7 @@ func createTablesListHandler(client ClickHouseSchemaClient) types.ReadHandler {
 	}
 }
 
-func createClusterTablesHandler(client ClickHouseSchemaClient) types.ReadHandler {
+func createClusterTablesHandler(client SchemaClient) types.ReadHandler {
 	return func(_ context.Context, uri string) (string, error) {
 		parts := tableURISegments(uri)
 		if len(parts) != 1 {
@@ -145,7 +145,7 @@ func createClusterTablesHandler(client ClickHouseSchemaClient) types.ReadHandler
 	}
 }
 
-func createDatabaseTablesHandler(client ClickHouseSchemaClient) types.ReadHandler {
+func createDatabaseTablesHandler(client SchemaClient) types.ReadHandler {
 	return func(_ context.Context, uri string) (string, error) {
 		parts := tableURISegments(uri)
 		if len(parts) != 2 {
@@ -169,7 +169,7 @@ func createDatabaseTablesHandler(client ClickHouseSchemaClient) types.ReadHandle
 	}
 }
 
-func createTableDetailHandler(log logrus.FieldLogger, client ClickHouseSchemaClient) types.ReadHandler {
+func createTableDetailHandler(log logrus.FieldLogger, client SchemaClient) types.ReadHandler {
 	return func(_ context.Context, uri string) (string, error) {
 		parts := tableURISegments(uri)
 		if len(parts) != 3 {
@@ -237,7 +237,7 @@ func buildClusterSummary(cluster *ClusterTables, databaseFilter string) *Cluster
 }
 
 // clusterNotFoundError builds an error that names the clusters that do exist.
-func clusterNotFoundError(client ClickHouseSchemaClient, clusterName string) error {
+func clusterNotFoundError(client SchemaClient, clusterName string) error {
 	available := make([]string, 0, len(client.GetAllTables()))
 	for name := range client.GetAllTables() {
 		available = append(available, name)

@@ -79,7 +79,7 @@ func ResolveProxyConfigPath(explicit, baseDir string) (string, error) {
 		return cleanRelative(baseDir, explicit), nil
 	}
 
-	for _, envVar := range []string{"PANDA_PROXY_CONFIG", "ETHPANDAOPS_PROXY_CONFIG", "CONFIG_PATH"} {
+	for _, envVar := range []string{"PANDA_PROXY_CONFIG", "ETHPANDAOPS_PROXY_CONFIG"} {
 		if value := strings.TrimSpace(os.Getenv(envVar)); value != "" {
 			return filepath.Clean(value), nil
 		}

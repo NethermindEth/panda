@@ -19,6 +19,16 @@ var (
 	executeSession string
 )
 
+// exitCodeError carries a sandbox exit code so the process can mirror it as its
+// own exit status instead of collapsing every failure to 1.
+type exitCodeError struct {
+	code int
+}
+
+func (e *exitCodeError) Error() string {
+	return fmt.Sprintf("exit code %d", e.code)
+}
+
 var executeCmd = &cobra.Command{
 	GroupID: groupWorkflow,
 	Use:     "execute",
@@ -94,7 +104,7 @@ func runExecute(_ *cobra.Command, _ []string) error {
 	}
 
 	if result.ExitCode != 0 {
-		return fmt.Errorf("exit code %d", result.ExitCode)
+		return &exitCodeError{code: result.ExitCode}
 	}
 
 	return nil

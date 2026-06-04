@@ -17,7 +17,6 @@ import (
 const defaultProxyAuthClientID = "panda"
 
 type authTarget struct {
-	mode      string
 	issuerURL string
 	clientID  string
 	resource  string
@@ -73,6 +72,34 @@ func init() {
 	}
 }
 
+// newAuthClient builds an auth client for the resolved target, wiring the
+// proxy branding URL when a proxy URL is known.
+func newAuthClient(target *authTarget, headless bool) authclient.Client {
+	cfg := authclient.Config{
+		IssuerURL: target.issuerURL,
+		ClientID:  target.clientID,
+		Resource:  target.resource,
+		Headless:  headless,
+	}
+
+	if target.proxyURL != "" {
+		cfg.BrandingURL = strings.TrimRight(target.proxyURL, "/") + "/auth/branding"
+	}
+
+	return authclient.New(log, cfg)
+}
+
+// newAuthStore builds the credential store for the resolved target. The store
+// uses client for token refresh when one is supplied.
+func newAuthStore(target *authTarget, client authclient.Client) authstore.Store {
+	return authstore.New(log, authstore.Config{
+		AuthClient: client,
+		IssuerURL:  target.issuerURL,
+		ClientID:   target.clientID,
+		Resource:   target.resource,
+	})
+}
+
 func runAuthLogin(_ *cobra.Command, _ []string) error {
 	target, err := resolveAuthTarget(context.Background())
 	if err != nil {
@@ -92,30 +119,14 @@ func runAuthLogin(_ *cobra.Command, _ []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	clientCfg := authclient.Config{
-		IssuerURL: target.issuerURL,
-		ClientID:  target.clientID,
-		Resource:  target.resource,
-		Headless:  headless,
-	}
-
-	if target.proxyURL != "" {
-		clientCfg.BrandingURL = strings.TrimRight(target.proxyURL, "/") + "/auth/branding"
-	}
-
-	client := authclient.New(log, clientCfg)
+	client := newAuthClient(target, headless)
 
 	tokens, err := client.Login(ctx)
 	if err != nil {
 		return fmt.Errorf("login failed: %w", err)
 	}
 
-	store := authstore.New(log, authstore.Config{
-		AuthClient: client,
-		IssuerURL:  target.issuerURL,
-		ClientID:   target.clientID,
-		Resource:   target.resource,
-	})
+	store := newAuthStore(target, client)
 
 	if err := store.Save(tokens); err != nil {
 		return fmt.Errorf("saving tokens: %w", err)
@@ -137,11 +148,7 @@ func runAuthLogout(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	store := authstore.New(log, authstore.Config{
-		IssuerURL: target.issuerURL,
-		ClientID:  target.clientID,
-		Resource:  target.resource,
-	})
+	store := newAuthStore(target, nil)
 
 	if err := store.Clear(); err != nil {
 		return fmt.Errorf("clearing tokens: %w", err)
@@ -162,18 +169,8 @@ func runAuthStatus(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	client := authclient.New(log, authclient.Config{
-		IssuerURL: target.issuerURL,
-		ClientID:  target.clientID,
-		Resource:  target.resource,
-	})
-
-	store := authstore.New(log, authstore.Config{
-		AuthClient: client,
-		IssuerURL:  target.issuerURL,
-		ClientID:   target.clientID,
-		Resource:   target.resource,
-	})
+	client := newAuthClient(target, false)
+	store := newAuthStore(target, client)
 
 	tokens, err := store.Load()
 	if err != nil {
@@ -204,7 +201,6 @@ func resolveAuthTarget(ctx context.Context) (*authTarget, error) {
 	// 1. Explicit CLI flags take priority.
 	if strings.TrimSpace(authIssuerURL) != "" || strings.TrimSpace(authClientID) != "" || strings.TrimSpace(authResource) != "" {
 		target := &authTarget{
-			mode:      "oidc",
 			issuerURL: strings.TrimSpace(authIssuerURL),
 			clientID:  strings.TrimSpace(authClientID),
 			resource:  strings.TrimSpace(authResource),
@@ -213,10 +209,6 @@ func resolveAuthTarget(ctx context.Context) (*authTarget, error) {
 
 		if target.clientID == "" {
 			target.clientID = defaultProxyAuthClientID
-		}
-
-		if target.resource == "" && target.mode != "oidc" {
-			target.resource = target.issuerURL
 		}
 
 		if target.issuerURL == "" {
@@ -241,23 +233,23 @@ func resolveAuthTarget(ctx context.Context) (*authTarget, error) {
 		)
 	}
 
+	mode := strings.TrimSpace(metadata.Mode)
+	if mode == "" {
+		mode = "oauth"
+	}
+
 	target := &authTarget{
-		mode:      strings.TrimSpace(metadata.Mode),
 		issuerURL: strings.TrimSpace(metadata.IssuerURL),
 		clientID:  strings.TrimSpace(metadata.ClientID),
 		resource:  strings.TrimSpace(metadata.Resource),
 		enabled:   metadata.Enabled,
 	}
 
-	if target.mode == "" {
-		target.mode = "oauth"
-	}
-
 	if target.clientID == "" {
 		target.clientID = defaultProxyAuthClientID
 	}
 
-	if target.resource == "" && target.mode != "oidc" {
+	if target.resource == "" && mode != "oidc" {
 		target.resource = target.issuerURL
 	}
 
@@ -305,7 +297,6 @@ func resolveAuthTargetFromConfig() *authTarget {
 	}
 
 	return &authTarget{
-		mode:      mode,
 		issuerURL: issuerURL,
 		clientID:  clientID,
 		resource:  resource,

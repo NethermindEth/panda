@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ethpandaops/panda/pkg/proxy"
+	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 	"github.com/ethpandaops/panda/pkg/types"
 )
 
@@ -58,8 +59,8 @@ func TestClickHouseQueryRoutesToDatasourceOwnerProxy(t *testing.T) {
 	if got := transport.last.Header.Get("Authorization"); got != "Bearer local-token" {
 		t.Fatalf("Authorization = %q, want local token", got)
 	}
-	if got := transport.last.Header.Get(proxyDatasourceHeader); got != "local-kurtosis" {
-		t.Fatalf("%s = %q, want local-kurtosis", proxyDatasourceHeader, got)
+	if got := transport.last.Header.Get(handlers.DatasourceHeader); got != "local-kurtosis" {
+		t.Fatalf("%s = %q, want local-kurtosis", handlers.DatasourceHeader, got)
 	}
 	if got := strings.TrimSpace(string(transport.lastBody)); got != "SELECT 1" {
 		t.Fatalf("proxied body = %q, want SELECT 1", got)
@@ -97,7 +98,7 @@ func TestDatasourceProxyRequestRoutesByTypeAndName(t *testing.T) {
 		http.MethodGet,
 		"/loki/loki/api/v1/query?query=up",
 		nil,
-		http.Header{proxyDatasourceHeader: []string{"logs"}},
+		http.Header{handlers.DatasourceHeader: []string{"logs"}},
 	)
 	if err != nil {
 		t.Fatalf("proxyDatasourceRequest error = %v", err)

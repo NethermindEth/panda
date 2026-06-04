@@ -241,6 +241,48 @@ func TestHandleTokenRefreshGrantRejectsRemovedOrg(t *testing.T) {
 	}
 }
 
+func TestHandleDeviceTokenGrantEmitsSlowDownOnFastPolling(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestSimpleService(t, nil)
+	svc.devices["device-code"] = &deviceAuth{
+		DeviceCode: "device-code",
+		UserCode:   "ABCD-EFGH",
+		ClientID:   "panda",
+		Resource:   testIssuerURL,
+		CreatedAt:  time.Now(),
+		ExpiresAt:  time.Now().Add(10 * time.Minute),
+	}
+
+	poll := func() (int, string) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "http://internal-proxy/auth/token", strings.NewReader(url.Values{
+			"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
+			"device_code": {"device-code"},
+			"client_id":   {"panda"},
+		}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		svc.handleToken(rec, req)
+
+		var body struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to decode error response: %v", err)
+		}
+
+		return rec.Code, body.Error
+	}
+
+	if code, errCode := poll(); code != http.StatusBadRequest || errCode != "authorization_pending" {
+		t.Fatalf("first poll: expected authorization_pending, got status %d error %q", code, errCode)
+	}
+
+	if code, errCode := poll(); code != http.StatusBadRequest || errCode != "slow_down" {
+		t.Fatalf("immediate second poll: expected slow_down, got status %d error %q", code, errCode)
+	}
+}
+
 type tokenResponseBody struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
