@@ -121,7 +121,7 @@ func TestRunServerRestartLogsAndWaitsForHealth(t *testing.T) {
 	var runnerCalls atomic.Int32
 	var runnerCompose string
 	var runnerArgs []string
-	dockerComposeRunner = func(compose string, args ...string) error {
+	dockerComposeRunner = func(_ context.Context, compose string, args ...string) error {
 		runnerCalls.Add(1)
 		runnerCompose = compose
 		runnerArgs = append([]string(nil), args...)
@@ -172,7 +172,7 @@ func TestRunServerStartLogsAndWaitsForHealth(t *testing.T) {
 	var runnerCalls atomic.Int32
 	var runnerCompose string
 	var runnerArgs []string
-	dockerComposeRunner = func(compose string, args ...string) error {
+	dockerComposeRunner = func(_ context.Context, compose string, args ...string) error {
 		runnerCalls.Add(1)
 		runnerCompose = compose
 		runnerArgs = append([]string(nil), args...)

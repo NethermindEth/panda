@@ -139,7 +139,7 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Token expires at: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
 	// Restart the server if it's running so it picks up the new credentials.
-	restartServerIfRunning()
+	restartServerIfRunning(baseCtx)
 
 	return nil
 }

@@ -66,8 +66,9 @@ func init() {
 
 func runUpgrade(cmd *cobra.Command, _ []string) error {
 	checker := github.NewReleaseChecker(github.RepoOwner, github.RepoName)
+	baseCtx := commandContext(cmd)
 
-	ctx, cancel := context.WithTimeout(commandContext(cmd), 30*time.Second)
+	ctx, cancel := context.WithTimeout(baseCtx, 30*time.Second)
 	defer cancel()
 
 	fmt.Println("Checking for updates...")
@@ -112,7 +113,7 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 	}
 
 	if doCLI {
-		if err := downloadAndReplaceBinary(release); err != nil {
+		if err := downloadAndReplaceBinary(baseCtx, release); err != nil {
 			return fmt.Errorf("upgrading CLI: %w", err)
 		}
 	}
@@ -124,11 +125,11 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 		// would use the old compose template — missing any fixes the
 		// new version added (e.g. group_add for Docker socket perms).
 		if doCLI {
-			if err := execNewBinary("server", "update"); err != nil {
+			if err := execNewBinary(baseCtx, "server", "update"); err != nil {
 				return fmt.Errorf("upgrading server: %w", err)
 			}
 		} else {
-			if err := upgradeServer(commandContext(cmd)); err != nil {
+			if err := upgradeServer(baseCtx); err != nil {
 				return fmt.Errorf("upgrading server: %w", err)
 			}
 		}
@@ -142,7 +143,7 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 
 // downloadAndReplaceBinary downloads the latest CLI binary from a GitHub
 // release and atomically replaces the currently running binary.
-func downloadAndReplaceBinary(release *github.Release) error {
+func downloadAndReplaceBinary(ctx context.Context, release *github.Release) error {
 	asset, err := release.FindAsset(runtime.GOOS, runtime.GOARCH, binaryName)
 	if err != nil {
 		return err
@@ -151,12 +152,12 @@ func downloadAndReplaceBinary(release *github.Release) error {
 	fmt.Printf("Downloading %s %s for %s/%s...\n",
 		binaryName, release.TagName, runtime.GOOS, runtime.GOARCH)
 
-	tarballData, err := downloadURL(asset.BrowserDownloadURL)
+	tarballData, err := downloadURL(ctx, asset.BrowserDownloadURL)
 	if err != nil {
 		return fmt.Errorf("downloading binary: %w", err)
 	}
 
-	if err := verifyChecksum(release, asset.Name, tarballData); err != nil {
+	if err := verifyChecksum(ctx, release, asset.Name, tarballData); err != nil {
 		return err
 	}
 
@@ -208,7 +209,7 @@ func upgradeServer(ctx context.Context) error {
 
 	fmt.Println("Pulling server image...")
 
-	if err := runDockerCompose(compose, "pull"); err != nil {
+	if err := runDockerComposeContext(ctx, compose, "pull"); err != nil {
 		return err
 	}
 
@@ -261,7 +262,11 @@ func regenerateComposeFile() error {
 // arguments. This is used after a CLI self-update so that server-side
 // operations (like compose regeneration) use the new binary's code
 // rather than the old process still in memory.
-func execNewBinary(args ...string) error {
+func execNewBinary(ctx context.Context, args ...string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	binary, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("finding binary: %w", err)
@@ -272,7 +277,7 @@ func execNewBinary(args ...string) error {
 		return fmt.Errorf("resolving binary path: %w", err)
 	}
 
-	cmd := exec.Command(binary, args...)
+	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -306,8 +311,12 @@ func promptConfirm(prompt string) bool {
 }
 
 // downloadURL fetches the content at the given URL.
-func downloadURL(url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+func downloadURL(ctx context.Context, url string) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -332,6 +341,7 @@ func downloadURL(url string) ([]byte, error) {
 // the SHA256 of the given data matches the expected checksum for the
 // given filename.
 func verifyChecksum(
+	ctx context.Context,
 	release *github.Release,
 	filename string,
 	data []byte,
@@ -344,7 +354,7 @@ func verifyChecksum(
 
 	fmt.Println("Verifying checksum...")
 
-	checksumData, err := downloadURL(checksumAsset.BrowserDownloadURL)
+	checksumData, err := downloadURL(ctx, checksumAsset.BrowserDownloadURL)
 	if err != nil {
 		return fmt.Errorf("downloading checksums: %w", err)
 	}
