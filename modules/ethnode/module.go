@@ -3,6 +3,7 @@ package ethnode
 import (
 	"context"
 	"maps"
+	"sync"
 
 	"github.com/ethpandaops/panda/pkg/module"
 	"github.com/ethpandaops/panda/pkg/types"
@@ -20,7 +21,10 @@ var (
 )
 
 // Module implements the module.Module interface for direct Ethereum node API access.
-type Module struct{}
+type Module struct {
+	dsMu        sync.RWMutex
+	datasources []types.DatasourceInfo
+}
 
 // New creates a new ethnode module.
 func New() *Module {
@@ -30,14 +34,26 @@ func New() *Module {
 func (m *Module) Name() string { return "ethnode" }
 
 // InitFromDiscovery enables the module if an ethnode datasource exists.
+// Safe to call repeatedly: it replaces the stored list so the proxy client's
+// periodic refresh propagates without a restart.
 func (m *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
+	filtered := make([]types.DatasourceInfo, 0, len(datasources))
+
 	for _, ds := range datasources {
 		if ds.Type == "ethnode" {
-			return nil // module defaults to enabled
+			filtered = append(filtered, ds)
 		}
 	}
 
-	return module.ErrNoValidConfig
+	m.dsMu.Lock()
+	m.datasources = filtered
+	m.dsMu.Unlock()
+
+	if len(filtered) == 0 {
+		return module.ErrNoValidConfig
+	}
+
+	return nil
 }
 
 func (m *Module) Init(_ []byte) error { return nil }
@@ -53,9 +69,17 @@ func (m *Module) SandboxEnv() (map[string]string, error) {
 	}, nil
 }
 
-// DatasourceInfo returns empty since ethnode is a pass-through proxy, not a named datasource.
+// DatasourceInfo returns the discovered ethnode datasource. Ethnode is a single
+// type-level entry rather than a named list: the proxy relays to any
+// {network}/{instance} host on demand and holds no enumerable instance list.
 func (m *Module) DatasourceInfo() []types.DatasourceInfo {
-	return nil
+	m.dsMu.RLock()
+	defer m.dsMu.RUnlock()
+
+	result := make([]types.DatasourceInfo, len(m.datasources))
+	copy(result, m.datasources)
+
+	return result
 }
 
 // Examples returns query examples for ethnode.
@@ -72,6 +96,9 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 		"ethnode": {
 			Description: "Direct access to Ethereum beacon and execution node APIs",
 			Functions: map[string]types.FunctionDoc{
+				// Discovery functions.
+				"list_datasources": {Signature: "list_datasources() -> list[dict]", Description: "List available ethnode datasources"},
+				"list_networks":    {Signature: "list_networks() -> list[dict]", Description: "List networks reachable for direct node access"},
 				// Beacon node (CL) functions.
 				"get_node_version":         {Signature: "get_node_version(network, instance) -> dict", Description: "Get beacon node software version"},
 				"get_node_syncing":         {Signature: "get_node_syncing(network, instance) -> dict", Description: "Get beacon node sync status"},

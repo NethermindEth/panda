@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -336,6 +337,10 @@ func (f *fakeProxyClient) ClickHouseDatasources() []string {
 }
 
 func (f *fakeProxyClient) ClickHouseDatasourceInfo() []types.DatasourceInfo { return f.clickhouse }
+
+func (f *fakeProxyClient) ClickHouseQuery(_ context.Context, _, _ string, _ url.Values) ([]byte, error) {
+	return nil, nil
+}
 
 func (f *fakeProxyClient) PrometheusDatasources() []string {
 	names := make([]string, 0, len(f.prometheus))

@@ -225,20 +225,22 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys ('extra.database' holds the default database)",
 				},
 				"query": {
-					Signature:   "clickhouse.query(datasource: str, sql: str) -> pandas.DataFrame",
+					Signature:   "clickhouse.query(datasource: str, sql: str, parameters: dict | None = None) -> pandas.DataFrame",
 					Description: "Execute SQL query, return DataFrame",
 					Parameters: map[string]string{
 						"datasource": "'clickhouse-raw' or 'clickhouse-refined' - see panda://getting-started for syntax differences",
 						"sql":        "SQL query string",
+						"parameters": "Optional ClickHouse query parameters referenced in SQL as {name:Type}",
 					},
 					Returns: "pandas.DataFrame",
 				},
 				"query_raw": {
-					Signature:   "clickhouse.query_raw(datasource: str, sql: str) -> tuple[list[tuple], list[str]]",
+					Signature:   "clickhouse.query_raw(datasource: str, sql: str, parameters: dict | None = None) -> tuple[list[tuple], list[str]]",
 					Description: "Execute SQL query, return raw tuples",
 					Parameters: map[string]string{
 						"datasource": "'clickhouse-raw' or 'clickhouse-refined'",
 						"sql":        "SQL query string",
+						"parameters": "Optional ClickHouse query parameters referenced in SQL as {name:Type}",
 					},
 					Returns: "(rows, column_names)",
 				},
@@ -249,12 +251,12 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 
 // GettingStartedSnippet returns ClickHouse-specific getting-started content.
 func (m *Module) GettingStartedSnippet() string {
-	return `## ClickHouse Cluster Rules
+	return `## ClickHouse Datasource Rules
 
-Xatu data is split across **TWO clusters** with **DIFFERENT syntax**:
+Xatu data is split across **TWO datasources** with **DIFFERENT syntax**:
 
-| Cluster | Contains | Table Syntax | Network Filter |
-|---------|----------|--------------|----------------|
+| Datasource | Contains | Table Syntax | Network Filter |
+|------------|----------|--------------|----------------|
 | **clickhouse-raw** | Raw events | ` + "`FROM table_name`" + ` | ` + "`WHERE meta_network_name = 'mainnet'`" + ` |
 | **clickhouse-refined** | Pre-aggregated | ` + "`FROM mainnet.table_name`" + ` | Database prefix IS the filter |
 

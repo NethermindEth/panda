@@ -8,12 +8,12 @@ import (
 
 // completeDatasourceNames completes the first positional arg with datasource names.
 func completeDatasourceNames(dsType string) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 		if len(args) > 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		response, err := listDatasources(context.Background(), dsType)
+		response, err := listDatasources(commandContext(cmd), dsType)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -28,12 +28,40 @@ func completeDatasourceNames(dsType string) func(*cobra.Command, []string, strin
 }
 
 // completeNetworkNames completes the first positional arg with network names.
-func completeNetworkNames(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+func completeNetworkNames(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	response, err := runServerOperation("dora.list_networks", map[string]any{})
+	response, err := runServerOperation(cmd, "dora.list_networks", map[string]any{})
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	data, _ := response.Data.(map[string]any)
+	items, _ := data["networks"].([]any)
+
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		network, _ := item.(map[string]any)
+		if name, _ := network["name"].(string); name != "" {
+			names = append(names, name)
+		}
+	}
+
+	return names, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeEthNodeArgs completes the ethnode positional args. The first arg
+// (network) is completed from ethnode's own active networks; the second arg
+// (instance) is a per-node DNS label the proxy cannot enumerate, so it is left
+// to free text with file completion disabled.
+func completeEthNodeArgs(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	response, err := runServerOperation(cmd, "ethnode.list_networks", map[string]any{})
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -53,12 +81,12 @@ func completeNetworkNames(_ *cobra.Command, args []string, _ string) ([]string, 
 }
 
 // completeSessionIDs completes the first positional arg with session IDs.
-func completeSessionIDs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+func completeSessionIDs(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	response, err := listSessions(context.Background())
+	response, err := listSessions(commandContext(cmd))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -73,8 +101,8 @@ func completeSessionIDs(_ *cobra.Command, args []string, _ string) ([]string, co
 
 // completeSchemaArgs completes the "schema" positional args, narrowing from
 // cluster (arg 0) to database (arg 1) to table (arg 2).
-func completeSchemaArgs(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-	ctx := context.Background()
+func completeSchemaArgs(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	ctx := commandContext(cmd)
 
 	switch len(args) {
 	case 0:

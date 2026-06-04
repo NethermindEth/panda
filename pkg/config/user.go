@@ -247,6 +247,14 @@ func DeepMerge(base, overlay map[string]any) map[string]any {
 
 		if bIsMap && oIsMap {
 			result[k] = DeepMerge(bm, om)
+			continue
+		}
+
+		bs, bIsSlice := toAnySlice(bv)
+		os, oIsSlice := toAnySlice(ov)
+
+		if bIsSlice && oIsSlice {
+			result[k] = mergeSlices(bs, os)
 		} else {
 			result[k] = ov
 		}
@@ -262,12 +270,62 @@ func toStringMap(v any) (map[string]any, bool) {
 	return m, ok
 }
 
+func toAnySlice(v any) ([]any, bool) {
+	s, ok := v.([]any)
+	return s, ok
+}
+
+func mergeSlices(base, overlay []any) []any {
+	if len(overlay) == 0 {
+		return []any{}
+	}
+
+	result := make([]any, len(base))
+	copy(result, base)
+
+	for i, ov := range overlay {
+		if i >= len(result) {
+			result = append(result, ov)
+			continue
+		}
+
+		bm, bIsMap := toStringMap(result[i])
+		om, oIsMap := toStringMap(ov)
+
+		if bIsMap && oIsMap {
+			result[i] = DeepMerge(bm, om)
+		} else {
+			result[i] = ov
+		}
+	}
+
+	return result
+}
+
 // setNestedValue sets a value in a nested map structure, creating intermediate
 // maps as needed. Keys represent the path (e.g., ["sandbox", "timeout"]).
 func setNestedValue(m map[string]any, keys []string, value any) {
 	for i, key := range keys {
 		if i == len(keys)-1 {
 			m[key] = value
+
+			return
+		}
+
+		if listIndex, ok := pathListIndex(keys[i+1]); ok {
+			list, _ := m[key].([]any)
+			for len(list) <= listIndex {
+				list = append(list, map[string]any{})
+			}
+
+			next, ok := list[listIndex].(map[string]any)
+			if !ok {
+				next = make(map[string]any, 4)
+				list[listIndex] = next
+			}
+
+			setNestedValue(next, keys[i+2:], value)
+			m[key] = list
 
 			return
 		}
@@ -280,6 +338,25 @@ func setNestedValue(m map[string]any, keys []string, value any) {
 
 		m = next
 	}
+}
+
+func pathListIndex(key string) (int, bool) {
+	for _, r := range key {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+	}
+
+	if key == "" {
+		return 0, false
+	}
+
+	index := 0
+	for _, r := range key {
+		index = index*10 + int(r-'0')
+	}
+
+	return index, true
 }
 
 // BuildOverrideMap constructs a minimal override map from field descriptors.

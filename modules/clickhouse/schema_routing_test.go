@@ -1,11 +1,11 @@
 package clickhouse
 
 import (
-	"bytes"
 	"context"
 	"io"
-	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,8 +17,6 @@ import (
 
 func TestSchemaRefreshRoutesDatasourceToOwningProxy(t *testing.T) {
 	t.Parallel()
-
-	transport := &schemaRecordingTransport{}
 
 	hosted := &schemaProxyClient{
 		url:        "https://hosted.proxy",
@@ -47,7 +45,6 @@ func TestSchemaRefreshRoutesDatasourceToOwningProxy(t *testing.T) {
 			{Name: "local", Client: local, Local: true},
 		}),
 	).(*clickhouseSchemaClient)
-	client.httpClient = &http.Client{Transport: transport}
 
 	if err := client.initDatasources(); err != nil {
 		t.Fatalf("initDatasources error = %v", err)
@@ -57,17 +54,20 @@ func TestSchemaRefreshRoutesDatasourceToOwningProxy(t *testing.T) {
 		t.Fatalf("refresh error = %v", err)
 	}
 
-	if len(transport.hosts) == 0 {
-		t.Fatalf("schema refresh made no HTTP requests")
+	if hosted.queryCount() != 0 {
+		t.Fatalf("hosted proxy received %d schema queries, want 0", hosted.queryCount())
 	}
-	for _, host := range transport.hosts {
-		if host != "local.proxy" {
-			t.Fatalf("schema request host = %q, want local.proxy; all hosts: %v", host, transport.hosts)
+
+	localQueries := local.snapshotQueries()
+	if len(localQueries) == 0 {
+		t.Fatalf("schema refresh made no queries through local proxy")
+	}
+	for _, query := range localQueries {
+		if query.datasource != "local-kurtosis" {
+			t.Fatalf("schema query datasource = %q, want local-kurtosis", query.datasource)
 		}
-	}
-	for _, auth := range transport.authHeaders {
-		if auth != "Bearer local-token" {
-			t.Fatalf("schema request Authorization = %q, want local token", auth)
+		if got := query.params.Get("default_format"); got != "JSON" {
+			t.Fatalf("schema query default_format = %q, want JSON", got)
 		}
 	}
 
@@ -81,42 +81,19 @@ func TestSchemaRefreshRoutesDatasourceToOwningProxy(t *testing.T) {
 	}
 }
 
-type schemaRecordingTransport struct {
-	hosts       []string
-	authHeaders []string
-}
-
-func (t *schemaRecordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	t.hosts = append(t.hosts, req.URL.Host)
-	t.authHeaders = append(t.authHeaders, req.Header.Get("Authorization"))
-
-	sql := string(body)
-	response := `{"meta":[],"data":[],"rows":0}`
-	switch {
-	case strings.Contains(sql, "SELECT currentDatabase()"):
-		response = `{"meta":[{"name":"db"}],"data":[{"db":"otel"}],"rows":1}`
-	case strings.Contains(sql, "SHOW TABLES"):
-		response = `{"meta":[{"name":"name"}],"data":[{"name":"otel_logs"}],"rows":1}`
-	case strings.Contains(sql, "SHOW CREATE TABLE"):
-		response = `{"meta":[{"name":"statement"}],"data":[{"statement":"CREATE TABLE ` + "`" + `otel_logs` + "`" + ` (` + "`" + `Timestamp` + "`" + ` DateTime) ENGINE = MergeTree ORDER BY tuple()"}],"rows":1}`
-	}
-
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(bytes.NewBufferString(response)),
-	}, nil
+type schemaQuery struct {
+	datasource string
+	sql        string
+	params     url.Values
 }
 
 type schemaProxyClient struct {
 	url        string
 	token      string
 	clickhouse []types.DatasourceInfo
+
+	mu      sync.Mutex
+	queries []schemaQuery
 }
 
 func (c *schemaProxyClient) Start(_ context.Context) error { return nil }
@@ -129,6 +106,27 @@ func (c *schemaProxyClient) ClickHouseDatasources() []string {
 }
 func (c *schemaProxyClient) ClickHouseDatasourceInfo() []types.DatasourceInfo {
 	return append([]types.DatasourceInfo(nil), c.clickhouse...)
+}
+func (c *schemaProxyClient) ClickHouseQuery(_ context.Context, datasource, sql string, params url.Values) ([]byte, error) {
+	c.mu.Lock()
+	c.queries = append(c.queries, schemaQuery{
+		datasource: datasource,
+		sql:        sql,
+		params:     cloneValues(params),
+	})
+	c.mu.Unlock()
+
+	response := `{"meta":[],"data":[],"rows":0}`
+	switch {
+	case strings.Contains(sql, "SELECT currentDatabase()"):
+		response = `{"meta":[{"name":"db"}],"data":[{"db":"otel"}],"rows":1}`
+	case strings.Contains(sql, "SHOW TABLES"):
+		response = `{"meta":[{"name":"name"}],"data":[{"name":"otel_logs"}],"rows":1}`
+	case strings.Contains(sql, "SHOW CREATE TABLE"):
+		response = `{"meta":[{"name":"statement"}],"data":[{"statement":"CREATE TABLE ` + "`" + `otel_logs` + "`" + ` (` + "`" + `Timestamp` + "`" + ` DateTime) ENGINE = MergeTree ORDER BY tuple()"}],"rows":1}`
+	}
+
+	return []byte(response), nil
 }
 func (c *schemaProxyClient) PrometheusDatasources() []string { return nil }
 func (c *schemaProxyClient) PrometheusDatasourceInfo() []types.DatasourceInfo {
@@ -145,6 +143,33 @@ func (c *schemaProxyClient) EmbeddingModel() string           { return "" }
 func (c *schemaProxyClient) Discover(_ context.Context) error { return nil }
 func (c *schemaProxyClient) EnsureAuthenticated(_ context.Context) error {
 	return nil
+}
+
+func (c *schemaProxyClient) queryCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return len(c.queries)
+}
+
+func (c *schemaProxyClient) snapshotQueries() []schemaQuery {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return append([]schemaQuery(nil), c.queries...)
+}
+
+func cloneValues(values url.Values) url.Values {
+	if len(values) == 0 {
+		return nil
+	}
+
+	clone := make(url.Values, len(values))
+	for key, value := range values {
+		clone[key] = append([]string(nil), value...)
+	}
+
+	return clone
 }
 
 func schemaDatasourceNames(infos []types.DatasourceInfo) []string {

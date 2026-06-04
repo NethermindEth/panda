@@ -27,11 +27,18 @@ const (
 
 	// workflowCooldown is the minimum time between triggers for the same workflow.
 	workflowCooldown = 2 * time.Minute
-	// globalTriggerLimit is the max number of triggers allowed within globalTriggerWindow.
-	globalTriggerLimit = 10
-	// globalTriggerWindow is the time window for the global trigger limit.
-	globalTriggerWindow = 10 * time.Minute
+
+	// globalTriggerKey is the single bucket key used for the cross-workflow
+	// trigger budget enforced by the injected rate limiter.
+	globalTriggerKey = "github-trigger"
 )
+
+// GlobalTriggerRateLimiter enforces the cross-workflow trigger budget. It is
+// satisfied by the proxy's generic rate limiter; Allow consumes one unit from
+// the bucket identified by key and reports whether the trigger may proceed.
+type GlobalTriggerRateLimiter interface {
+	Allow(key string) bool
+}
 
 // GitHubConfig holds GitHub API proxy configuration.
 type GitHubConfig struct {
@@ -82,73 +89,57 @@ type gitHubWorkflowRun struct {
 
 // GitHubHandler handles GitHub API requests.
 type GitHubHandler struct {
-	log        logrus.FieldLogger
-	token      string
-	httpClient *http.Client
+	log           logrus.FieldLogger
+	token         string
+	httpClient    *http.Client
+	globalLimiter GlobalTriggerRateLimiter
 
-	mu               sync.Mutex
-	lastTrigger      map[string]time.Time // workflow -> last trigger time
-	globalTriggerLog []time.Time          // timestamps of recent triggers
+	mu          sync.Mutex
+	lastTrigger map[string]time.Time // workflow -> last trigger time
 }
 
-// NewGitHubHandler creates a new GitHub handler.
-func NewGitHubHandler(log logrus.FieldLogger, cfg GitHubConfig) *GitHubHandler {
+// NewGitHubHandler creates a new GitHub handler. globalLimiter enforces the
+// cross-workflow trigger budget; it may be nil to disable that budget.
+func NewGitHubHandler(log logrus.FieldLogger, cfg GitHubConfig, globalLimiter GlobalTriggerRateLimiter) *GitHubHandler {
 	return &GitHubHandler{
-		log:         log.WithField("handler", "github"),
-		token:       cfg.Token,
-		httpClient:  &http.Client{},
-		lastTrigger: make(map[string]time.Time),
+		log:           log.WithField("handler", "github"),
+		token:         cfg.Token,
+		httpClient:    &http.Client{},
+		globalLimiter: globalLimiter,
+		lastTrigger:   make(map[string]time.Time),
 	}
 }
 
-// checkTriggerAllowed returns an error message if the trigger should be rejected.
-func (h *GitHubHandler) checkTriggerAllowed(workflow string) string {
+// checkWorkflowCooldown returns an error message if the same workflow was
+// triggered within workflowCooldown.
+func (h *GitHubHandler) checkWorkflowCooldown(workflow string) string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	now := time.Now()
 
-	// Per-workflow cooldown.
-	if last, ok := h.lastTrigger[workflow]; ok {
-		remaining := workflowCooldown - now.Sub(last)
-		if remaining > 0 {
-			return fmt.Sprintf(
-				"workflow %s was triggered %s ago, wait %s (cooldown: %s)",
-				workflow, now.Sub(last).Round(time.Second), remaining.Round(time.Second), workflowCooldown,
-			)
-		}
+	last, ok := h.lastTrigger[workflow]
+	if !ok {
+		return ""
 	}
 
-	// Global rate limit: count triggers within the window.
-	cutoff := now.Add(-globalTriggerWindow)
-	recent := h.globalTriggerLog[:0]
-
-	for _, t := range h.globalTriggerLog {
-		if t.After(cutoff) {
-			recent = append(recent, t)
-		}
+	remaining := workflowCooldown - now.Sub(last)
+	if remaining <= 0 {
+		return ""
 	}
 
-	h.globalTriggerLog = recent
-
-	if len(h.globalTriggerLog) >= globalTriggerLimit {
-		return fmt.Sprintf(
-			"global trigger limit reached: %d triggers in the last %s (max %d)",
-			len(h.globalTriggerLog), globalTriggerWindow, globalTriggerLimit,
-		)
-	}
-
-	return ""
+	return fmt.Sprintf(
+		"workflow %s was triggered %s ago, wait %s (cooldown: %s)",
+		workflow, now.Sub(last).Round(time.Second), remaining.Round(time.Second), workflowCooldown,
+	)
 }
 
-// recordTrigger records a successful trigger for rate limiting.
+// recordTrigger records a successful trigger for the per-workflow cooldown.
 func (h *GitHubHandler) recordTrigger(workflow string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	now := time.Now()
-	h.lastTrigger[workflow] = now
-	h.globalTriggerLog = append(h.globalTriggerLog, now)
+	h.lastTrigger[workflow] = time.Now()
 }
 
 // ServeHTTP routes GitHub API requests.
@@ -191,14 +182,23 @@ func (h *GitHubHandler) handleTriggerWorkflow(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Rate limit check.
-	if reason := h.checkTriggerAllowed(req.Workflow); reason != "" {
+	// Per-workflow cooldown.
+	if reason := h.checkWorkflowCooldown(req.Workflow); reason != "" {
 		h.log.WithFields(logrus.Fields{
 			"workflow": req.Workflow,
 			"reason":   reason,
 		}).Warn("Build trigger rate limited")
 
 		writeError(w, http.StatusTooManyRequests, "%s", reason)
+
+		return
+	}
+
+	// Cross-workflow trigger budget.
+	if h.globalLimiter != nil && !h.globalLimiter.Allow(globalTriggerKey) {
+		h.log.WithField("workflow", req.Workflow).Warn("Build trigger rate limited: global trigger budget exhausted")
+
+		writeError(w, http.StatusTooManyRequests, "global trigger limit reached, try again later")
 
 		return
 	}

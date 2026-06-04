@@ -13,6 +13,30 @@ def _require_ethnode_available() -> None:
         raise ValueError("Ethnode is not enabled or no node access is available.")
 
 
+def list_datasources() -> list[dict[str, Any]]:
+    """List available ethnode datasources.
+
+    Entries include at least name and type. Ethnode is exposed as a type-level
+    datasource rather than a discoverable instance list.
+    """
+    _require_ethnode_available()
+    data = _runtime.invoke_data("ethnode.list_datasources") or {}
+    datasources = data.get("datasources", [])
+    return datasources if isinstance(datasources, list) else []
+
+
+def list_networks() -> list[dict[str, Any]]:
+    """List networks reachable for direct node access.
+
+    Entries include at least name and type. The per-node instance label cannot
+    be enumerated and must be supplied by the caller.
+    """
+    _require_ethnode_available()
+    data = _runtime.invoke_data("ethnode.list_networks") or {}
+    networks = data.get("networks", [])
+    return networks if isinstance(networks, list) else []
+
+
 def beacon_get(
     network: str,
     instance: str,

@@ -100,8 +100,10 @@ func newAuthStore(target *authTarget, client authclient.Client) authstore.Store 
 	})
 }
 
-func runAuthLogin(_ *cobra.Command, _ []string) error {
-	target, err := resolveAuthTarget(context.Background())
+func runAuthLogin(cmd *cobra.Command, _ []string) error {
+	baseCtx := commandContext(cmd)
+
+	target, err := resolveAuthTarget(baseCtx)
 	if err != nil {
 		return err
 	}
@@ -116,7 +118,7 @@ func runAuthLogin(_ *cobra.Command, _ []string) error {
 		fmt.Println("SSH session detected, using device authorization flow.")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(baseCtx, 5*time.Minute)
 	defer cancel()
 
 	client := newAuthClient(target, headless)
@@ -137,13 +139,13 @@ func runAuthLogin(_ *cobra.Command, _ []string) error {
 	fmt.Printf("Token expires at: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
 	// Restart the server if it's running so it picks up the new credentials.
-	restartServerIfRunning()
+	restartServerIfRunning(baseCtx)
 
 	return nil
 }
 
-func runAuthLogout(_ *cobra.Command, _ []string) error {
-	target, err := resolveAuthTarget(context.Background())
+func runAuthLogout(cmd *cobra.Command, _ []string) error {
+	target, err := resolveAuthTarget(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -158,8 +160,8 @@ func runAuthLogout(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runAuthStatus(_ *cobra.Command, _ []string) error {
-	target, err := resolveAuthTarget(context.Background())
+func runAuthStatus(cmd *cobra.Command, _ []string) error {
+	target, err := resolveAuthTarget(cmd.Context())
 	if err != nil {
 		return err
 	}

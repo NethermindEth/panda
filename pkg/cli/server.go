@@ -22,7 +22,7 @@ import (
 
 var (
 	composeFile         string
-	dockerComposeRunner = runDockerCompose
+	dockerComposeRunner = runDockerComposeContext
 )
 
 const defaultServerHealthWaitTimeout = 5 * time.Minute
@@ -274,7 +274,7 @@ func waitForServerHealth(ctx context.Context, timeout time.Duration) error {
 }
 
 func runComposeAndWait(ctx context.Context, composeFile string, composeArgs []string, timeout time.Duration) error {
-	if err := dockerComposeRunner(composeFile, composeArgs...); err != nil {
+	if err := dockerComposeRunner(ctx, composeFile, composeArgs...); err != nil {
 		return err
 	}
 
@@ -301,8 +301,8 @@ func runServerLogs(_ *cobra.Command, _ []string) error {
 	return runDockerCompose(resolveComposeFile(), "logs", "-f")
 }
 
-func runServerUpdate(_ *cobra.Command, _ []string) error {
-	return upgradeServer()
+func runServerUpdate(cmd *cobra.Command, _ []string) error {
+	return upgradeServer(commandContext(cmd))
 }
 
 // resolveComposeFile returns the docker-compose file path from
@@ -321,11 +321,19 @@ func resolveComposeFile() string {
 // runDockerCompose executes a docker compose command with the given
 // compose file and arguments, connecting stdout/stderr for live output.
 func runDockerCompose(compose string, args ...string) error {
+	return runDockerComposeContext(context.Background(), compose, args...)
+}
+
+func runDockerComposeContext(ctx context.Context, compose string, args ...string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	fullArgs := make([]string, 0, len(args)+3)
 	fullArgs = append(fullArgs, "compose", "-f", compose)
 	fullArgs = append(fullArgs, args...)
 
-	cmd := exec.Command("docker", fullArgs...)
+	cmd := exec.CommandContext(ctx, "docker", fullArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -404,23 +412,27 @@ func printProxyURL() {
 // restartServerIfRunning restarts the panda server container if the compose
 // file exists and the server is currently reachable. This is called after
 // auth login to ensure the running server picks up new credentials.
-func restartServerIfRunning() {
+func restartServerIfRunning(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	compose := resolveComposeFile()
 	if _, err := os.Stat(compose); os.IsNotExist(err) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	healthCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	if err := checkServerHealth(ctx); err != nil {
+	if err := checkServerHealth(healthCtx); err != nil {
 		return
 	}
 
 	fmt.Println("Restarting server to pick up new credentials...")
 
 	if err := runComposeAndWait(
-		context.Background(),
+		ctx,
 		compose,
 		[]string{"restart"},
 		defaultServerHealthWaitTimeout,

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ethpandaops/panda/pkg/operations"
@@ -18,6 +19,10 @@ var ethnodeSegmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a
 
 func (s *service) handleEthNodeOperation(operationID string, w http.ResponseWriter, r *http.Request) bool {
 	switch operationID {
+	case "ethnode.list_datasources":
+		s.handleEthNodeListDatasources(w)
+	case "ethnode.list_networks":
+		s.handleEthNodeListNetworks(w)
 	case "ethnode.beacon_get":
 		s.handleEthNodeBeaconGet(w, r)
 	case "ethnode.beacon_post":
@@ -61,6 +66,65 @@ func (s *service) handleEthNodeOperation(operationID string, w http.ResponseWrit
 	}
 
 	return true
+}
+
+func (s *service) handleEthNodeListDatasources(w http.ResponseWriter) {
+	if !s.ethNodeAvailable(w) {
+		return
+	}
+
+	items := make([]listItem, 0)
+	for _, info := range s.proxyService.EthNodeDatasourceInfo() {
+		items = append(items, listItem{
+			Name:        info.Name,
+			Description: info.Description,
+			Type:        info.Type,
+		})
+	}
+
+	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
+		Kind: operations.ResultKindObject,
+		Data: map[string]any{"datasources": items},
+	})
+}
+
+func (s *service) handleEthNodeListNetworks(w http.ResponseWriter) {
+	if !s.ethNodeAvailable(w) {
+		return
+	}
+
+	if s.cartographoorClient == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "ethnode network discovery is unavailable")
+		return
+	}
+
+	active := s.cartographoorClient.GetActiveNetworks()
+	items := make([]listItem, 0, len(active))
+	for name := range active {
+		items = append(items, listItem{
+			Name: name,
+			Type: "ethnode",
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+
+	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
+		Kind: operations.ResultKindObject,
+		Data: map[string]any{"networks": items},
+	})
+}
+
+func (s *service) ethNodeAvailable(w http.ResponseWriter) bool {
+	if s.proxyService.EthNodeAvailable() {
+		return true
+	}
+
+	writeAPIError(w, http.StatusServiceUnavailable, "Ethnode is not enabled or no node access is available.")
+
+	return false
 }
 
 func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request) {

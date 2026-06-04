@@ -8,10 +8,10 @@ ethpandaops/panda is a server + proxy system for Ethereum analytics. The server 
 
 The architecture is:
 - `panda` talks to `server`
-- `server` talks to `proxy`
-- `proxy` talks to datasources
+- `server` routes through `proxy`/`proxies`
+- each `proxy` talks to the datasources it advertises
 
-Modules provide integration-specific metadata and behavior for ClickHouse, Prometheus, Loki, Dora, and Ethnode.
+Modules provide integration-specific metadata and behavior for ClickHouse, Prometheus, Loki, Dora, Ethnode, CBT, and block archive.
 
 See `docs/architecture.md` for the canonical boundary definition.
 
@@ -21,7 +21,7 @@ See `docs/architecture.md` for the canonical boundary definition.
 - sandboxed Python calls back into `server`, never directly into `proxy`
 - `proxy` is a thin credentialed upstream gateway, not a product operations API
 - module behavior is exposed through `execute_python`, resources, docs, and search; do not add per-module MCP tools
-- datasource identity is owned by the proxy; modules initialize from proxy discovery
+- datasource identity is owned by the proxy route that advertised it; modules initialize from proxy discovery
 
 ## Supported Deployment Modes
 
@@ -91,7 +91,7 @@ uv run python -m scripts.repl
 2. `server` builds a credential-free sandbox environment with server runtime tokens and datasource metadata
 3. sandbox code calls back into `server` for operations and storage
 4. `server` stores uploaded files locally via the storage service (`~/.panda/data/storage/`)
-5. `server` calls `proxy` for credentialed upstream access to ClickHouse, Prometheus, Loki, and Ethnode
+5. `server` routes through the proxy client/router for credentialed upstream access to ClickHouse, Prometheus, Loki, and Ethnode
 
 ### Module System
 
@@ -111,13 +111,13 @@ Each module implements `module.Module` in `pkg/module/module.go`. Optional capab
 - `DefaultEnabled` — activates without explicit config (e.g., dora)
 - provider interfaces such as sandbox env, datasource info, examples, Python docs, getting-started snippets, and resources are optional and capability-based
 
-Datasource identity is owned by the proxy. Modules that implement `ProxyDiscoverable` initialize from discovered datasources. The proxy client refreshes every 5 minutes.
+Datasource identity is owned by the proxy that advertised it. Modules that implement `ProxyDiscoverable` initialize from discovered datasources. The proxy client refreshes datasource info every 60 seconds by default (the embedded local proxy polls every 5 seconds).
 
 ### Server Startup Order
 
 1. Module registry (register all compiled-in modules, no init yet)
 2. Sandbox service
-3. Proxy client (initial datasource discovery + background refresh every 5m)
+3. Proxy client/router (initial datasource discovery + background refresh every 60s by default; embedded local proxy every 5s)
 4. Module initialization (proxy discovery or DefaultEnabled)
 5. Inject proxy into `ProxyAware` modules and start modules
 6. Cartographoor client
@@ -135,14 +135,30 @@ MCP tools (exactly 3 — this is intentional and must not be expanded; do not ad
 
 All module functionality is exposed to MCP clients through `execute_python`. Modules that want to be usable in an MCP context must provide Python libraries, examples, and documentation so that the LLM can generate Python code that queries the module's datasources via the sandbox. There are no per-module MCP tools — the Python sandbox is the universal interface.
 
-CLI commands:
+CLI commands and groups include:
+- `auth`
+- `block-archive`
+- `build` (GitHub Actions Docker image builder)
+- `clickhouse`
+- `config`
 - `datasources`
-- `schema`
 - `docs`
+- `dora`
+- `ethnode`
 - `execute`
-- `session`
+- `getting-started`
+- `init`
+- `loki`
+- `prometheus`
+- `resources`
+- `schema`
 - `search`
-- module command groups such as `clickhouse`, `prometheus`, `loki`, `dora`, and `ethnode`
+- `server`
+- `session`
+- `upgrade`
+- `version`
+
+`cbt` is a data module exposed through `execute_python`; it is not a top-level CLI command group.
 
 The proxy is a separate binary, built with `make build-proxy`.
 
@@ -166,11 +182,23 @@ Key config sections:
 server:
   base_url: "http://localhost:2480"
 
-proxy:
-  url: "http://localhost:18081"
-  auth:
-    issuer_url: "..."
-    client_id: "..."
+proxies:
+  - name: "hosted"
+    url: "https://panda-proxy.ethpandaops.io"
+    auth:
+      mode: "oidc" # or "oauth"
+      issuer_url: "https://panda-proxy.ethpandaops.io"
+      client_id: "panda"
+
+local_proxy:
+  enabled: true
+  clickhouse:
+    - name: "local-kurtosis"
+      host: "host.docker.internal"
+      port: 18123
+      database: "otel"
+      autodiscover: true
+      autodiscover_interval: 10s
 
 storage:
   base_dir: "~/.panda/data/storage"
@@ -185,6 +213,8 @@ sandbox:
 ```
 
 Environment variables are substituted using `${VAR_NAME}` or `${VAR_NAME:-default}` syntax.
+
+`local_proxy` is an in-process loopback proxy for local datasources. It is enabled by default and runs unauthenticated. The deprecated single `proxy:` form is still accepted when used alone and is promoted to `proxies[0]`; setting both `proxy:` and `proxies:` is an error.
 
 ## Project Layout
 
@@ -213,6 +243,8 @@ modules/
   loki/            # Loki module
   dora/            # Dora module
   ethnode/         # Ethnode module
+  cbt/             # CBT module
+  block_archive/   # Block archive module
 runbooks/          # Embedded markdown runbooks
 sandbox/           # Sandbox Docker image
 tests/eval/        # LLM evaluation harness
@@ -237,5 +269,5 @@ File storage is local to the server process (`~/.panda/data/storage/` by default
 
 See `docs/deployments.md` for supported deployment shapes. The intended boundary stays the same in each mode:
 - clients talk to `server`
-- `server` talks to `proxy`
-- `proxy` talks to datasources
+- `server` routes through `proxy`/`proxies`
+- each `proxy` talks to the datasources it advertises

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -77,6 +78,13 @@ func TestRouterMergesDatasourcesFirstWinsAndWarnsOnCollision(t *testing.T) {
 	}
 	if got := client.RegisterToken(); got != "local-token" {
 		t.Fatalf("local-kurtosis owner token = %q, want local-token", got)
+	}
+
+	if _, err := router.ClickHouseQuery(context.Background(), "local-kurtosis", "SELECT 1", nil); err != nil {
+		t.Fatalf("ClickHouseQuery(local-kurtosis) error = %v", err)
+	}
+	if hosted.queries != 0 || local.queries != 1 {
+		t.Fatalf("query counts = hosted:%d local:%d, want hosted:0 local:1", hosted.queries, local.queries)
 	}
 
 	logOutput := logBuf.String()
@@ -267,6 +275,7 @@ type fakeRouterClient struct {
 	starts    int
 	stops     int
 	discovers int
+	queries   int
 }
 
 func (f *fakeRouterClient) Start(_ context.Context) error {
@@ -293,6 +302,12 @@ func (f *fakeRouterClient) ClickHouseDatasources() []string {
 
 func (f *fakeRouterClient) ClickHouseDatasourceInfo() []types.DatasourceInfo {
 	return append([]types.DatasourceInfo(nil), f.clickhouse...)
+}
+
+func (f *fakeRouterClient) ClickHouseQuery(_ context.Context, _, _ string, _ url.Values) ([]byte, error) {
+	f.queries++
+
+	return nil, nil
 }
 
 func (f *fakeRouterClient) PrometheusDatasources() []string {

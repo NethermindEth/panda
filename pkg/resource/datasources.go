@@ -53,7 +53,7 @@ func RegisterDatasourcesResources(
 		Resource: mcp.NewResource(
 			"datasources://list",
 			"All Datasources",
-			mcp.WithResourceDescription("List of all configured datasources (ClickHouse, Prometheus, Loki)"),
+			mcp.WithResourceDescription("List of all discovered datasources exposed by initialized modules"),
 			mcp.WithMIMEType("application/json"),
 			mcp.WithAnnotations([]mcp.Role{mcp.RoleAssistant}, 0.8),
 		),
@@ -65,7 +65,7 @@ func RegisterDatasourcesResources(
 		Resource: mcp.NewResource(
 			"datasources://clickhouse",
 			"ClickHouse Datasources",
-			mcp.WithResourceDescription("Configured ClickHouse clusters for blockchain data queries"),
+			mcp.WithResourceDescription("Discovered ClickHouse datasources for blockchain data queries"),
 			mcp.WithMIMEType("application/json"),
 			mcp.WithAnnotations([]mcp.Role{mcp.RoleAssistant}, 0.7),
 		),
@@ -77,7 +77,7 @@ func RegisterDatasourcesResources(
 		Resource: mcp.NewResource(
 			"datasources://prometheus",
 			"Prometheus Datasources",
-			mcp.WithResourceDescription("Configured Prometheus instances for metrics queries"),
+			mcp.WithResourceDescription("Discovered Prometheus datasources for metrics queries"),
 			mcp.WithMIMEType("application/json"),
 			mcp.WithAnnotations([]mcp.Role{mcp.RoleAssistant}, 0.7),
 		),
@@ -89,7 +89,7 @@ func RegisterDatasourcesResources(
 		Resource: mcp.NewResource(
 			"datasources://loki",
 			"Loki Datasources",
-			mcp.WithResourceDescription("Configured Loki instances for log queries"),
+			mcp.WithResourceDescription("Discovered Loki datasources for log queries"),
 			mcp.WithMIMEType("application/json"),
 			mcp.WithAnnotations([]mcp.Role{mcp.RoleAssistant}, 0.7),
 		),

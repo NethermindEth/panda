@@ -28,12 +28,12 @@ Read more: https://www.anthropic.com/engineering/code-execution-with-mcp
 │                         └──────────────┬───────────────────┘   │
 │                                        │                       │
 └────────────────────────────────────────┼───────────────────────┘
-                                         │ GitHub OAuth
+                                         │ OAuth / OIDC
                               ┌──────────▼──────────┐
                               │ Proxy               │
                               │ (remote or local)   │
                               │                     │
-                              │  GitHub OAuth gate   │
+                              │  OAuth / OIDC gate   │
                               │  + credentials for   │
                               │  all datasources     │
                               └──────────┬──────────┘

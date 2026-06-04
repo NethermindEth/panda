@@ -5,19 +5,19 @@ See [architecture.md](architecture.md) for the source-of-truth responsibility sp
 This repo has one intended product topology:
 
 ```text
-panda -> server -> proxy -> datasources
+panda -> server -> proxy/proxies -> datasources
 ```
 
 - `panda` is a client.
 - `server` owns MCP, HTTP API, sandbox execution, sessions, and search.
-- `proxy` owns datasource credentials.
+- `proxy` routes own datasource credentials.
 - sandboxed Python talks to the local server using server-issued runtime tokens.
 
 ## Components
 
 - `panda`: local CLI that talks to `server` over HTTP.
 - `server`: runs MCP transports, the CLI-facing HTTP API, sandboxes, sessions, and search.
-- `proxy`: credential boundary for ClickHouse, Prometheus, Loki, and ethnode.
+- `proxy`: credential boundary for ClickHouse, Prometheus, Loki, and ethnode. The server can route across multiple configured proxies plus its embedded local proxy.
 - `modules`: datasource integrations, docs, resources, examples, and schema discovery.
 
 ## Local Docker Compose
@@ -48,7 +48,7 @@ hosted proxy -> datasources
 
 - the user runs `server` locally
 - the user points `panda` at that local server
-- the local server points `proxy.url` at the hosted proxy
+- the local server points a `proxies:` entry at the hosted proxy
 - code still executes on the user’s machine
 
 This is the recommended external-user shape when you do not want to execute code on your own servers.
@@ -60,9 +60,10 @@ This is the recommended external-user shape when you do not want to execute code
 - `server` config:
   - `server.sandbox_url`
   - sandbox settings
-  - module config
-  - `proxy.url`
-  - optional `proxy.auth`
+  - `proxies:` entries (`name`, `url`)
+  - optional `proxies[].auth` (`mode`, `issuer_url`, `client_id`)
+  - optional `local_proxy` settings for the embedded loopback proxy
+  - deprecated `proxy:` single-proxy form, promoted to `proxies[0]` when used alone
 - `proxy` config:
   - optional hosted GitHub auth config
   - datasource credentials

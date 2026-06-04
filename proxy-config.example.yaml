@@ -2,10 +2,11 @@
 # The proxy holds datasource credentials and proxies requests from sandbox containers.
 #
 # Usage:
-#   Local dev:  panda proxy -c proxy-config.yaml
+#   Local dev:  panda-proxy --config proxy-config.yaml
 #   Production: Deploy as a K8s service
 #
-# The MCP server connects to this proxy via its 'proxy.url' config.
+# The server connects to this proxy via a `proxies[].url` entry. The legacy
+# single `proxy.url` form is still accepted when used alone.
 #
 # Environment variables can be substituted using ${VAR_NAME} or ${VAR_NAME:-default} syntax.
 
@@ -84,16 +85,42 @@ auth:
 clickhouse:
   - name: clickhouse-raw
     description: "Raw ClickHouse cluster with raw Ethereum event data"
-    host: "${CLICKHOUSE_HOST}"
+    host: "${CLICKHOUSE_XATU_HOST}"
     port: 8443
-    database: default
-    username: "${CLICKHOUSE_USERNAME}"
-    password: "${CLICKHOUSE_PASSWORD}"
+    database: "${CLICKHOUSE_XATU_DATABASE}"
+    username: "${CLICKHOUSE_XATU_USERNAME}"
+    password: "${CLICKHOUSE_XATU_PASSWORD}"
     secure: true
     skip_verify: false
     timeout: 300
     # Restrict access to members of specific GitHub orgs.
     # Omit or leave empty to allow all authenticated users.
+    # allowed_orgs:
+    #   - ethpandaops
+
+  - name: clickhouse-refined
+    description: "Refined ClickHouse cluster with pre-aggregated Ethereum data"
+    host: "${CLICKHOUSE_REFINED_HOST}"
+    port: 8443
+    database: "${CLICKHOUSE_REFINED_DATABASE}"
+    username: "${CLICKHOUSE_REFINED_USERNAME}"
+    password: "${CLICKHOUSE_REFINED_PASSWORD}"
+    secure: true
+    skip_verify: false
+    timeout: 300
+    # allowed_orgs:
+    #   - ethpandaops
+
+  - name: xatu-experimental
+    description: "Experimental ClickHouse cluster with devnet data"
+    host: "${CLICKHOUSE_EXPERIMENTAL_HOST}"
+    port: 8443
+    database: "${CLICKHOUSE_EXPERIMENTAL_DATABASE}"
+    username: "${CLICKHOUSE_EXPERIMENTAL_USERNAME}"
+    password: "${CLICKHOUSE_EXPERIMENTAL_PASSWORD}"
+    secure: true
+    skip_verify: false
+    timeout: 300
     # allowed_orgs:
     #   - ethpandaops
 
@@ -109,11 +136,19 @@ clickhouse:
 
 # Prometheus instances
 prometheus:
-  - name: primary
-    description: "Primary Prometheus instance"
-    url: "${PROMETHEUS_URL}"
-    username: "${PROMETHEUS_USERNAME}"
-    password: "${PROMETHEUS_PASSWORD}"
+  - name: platform
+    description: "Platform Prometheus/VictoriaMetrics instance"
+    url: "${PROMETHEUS_PLATFORM_URL}"
+    username: "${PROMETHEUS_PLATFORM_USERNAME}"
+    password: "${PROMETHEUS_PLATFORM_PASSWORD}"
+    # allowed_orgs:
+    #   - ethpandaops
+
+  - name: devnets
+    description: "Devnets Prometheus instance"
+    url: "${PROMETHEUS_DEVNETS_URL}"
+    username: "${PROMETHEUS_DEVNETS_USERNAME}"
+    password: "${PROMETHEUS_DEVNETS_PASSWORD}"
     # allowed_orgs:
     #   - ethpandaops
 

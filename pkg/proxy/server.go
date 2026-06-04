@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,15 @@ import (
 	"github.com/ethpandaops/panda/pkg/auth"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 	"github.com/ethpandaops/panda/pkg/types"
+)
+
+const (
+	// githubTriggerBurst is the cross-workflow trigger budget: this many
+	// workflow_dispatch triggers may fire before the budget throttles.
+	githubTriggerBurst = 10
+	// githubTriggerRefillPerMinute is how fast the trigger budget refills.
+	// Ten per ten minutes refills at one per minute.
+	githubTriggerRefillPerMinute = 1
 )
 
 // Server is the credential proxy server interface.
@@ -48,11 +59,12 @@ type server struct {
 	mux     *chi.Mux
 	url     string
 
-	authenticator Authenticator
-	authService   auth.AuthorizationServer
-	authorizer    *Authorizer
-	rateLimiter   *RateLimiter
-	auditor       *Auditor
+	authenticator        Authenticator
+	authService          auth.AuthorizationServer
+	authorizer           *Authorizer
+	rateLimiter          *RateLimiter
+	githubTriggerLimiter *RateLimiter
+	auditor              *Auditor
 
 	clickhouseHandler *handlers.ClickHouseHandler
 	prometheusHandler *handlers.PrometheusHandler
@@ -196,9 +208,14 @@ func newServer(log logrus.FieldLogger, cfg ServerConfig, hostURL, port string) (
 
 	// Create GitHub handler if configured.
 	if cfg.GitHub != nil && cfg.GitHub.Token != "" {
+		s.githubTriggerLimiter = NewRateLimiter(log, RateLimiterConfig{
+			RequestsPerMinute: githubTriggerRefillPerMinute,
+			BurstSize:         githubTriggerBurst,
+		})
+
 		s.githubHandler = handlers.NewGitHubHandler(log, handlers.GitHubConfig{
 			Token: cfg.GitHub.Token,
-		})
+		}, s.githubTriggerLimiter)
 	}
 
 	if s.url == "" {
@@ -316,7 +333,23 @@ func (s *server) buildMiddlewareChain() func(http.Handler) http.Handler {
 
 // DatasourcesResponse is the response from the /datasources endpoint.
 // This is used by the MCP server client to discover available datasources.
+//
+// Datasource identity is carried solely by the *Info fields. The wire format
+// additionally emits and accepts a parallel name-only list per type
+// (clickhouse/prometheus/loki) for compatibility with older peers; that list
+// is derived from the *Info fields and never stored separately.
 type DatasourcesResponse struct {
+	ClickHouseInfo     []types.DatasourceInfo `json:"clickhouse_info,omitempty"`
+	PrometheusInfo     []types.DatasourceInfo `json:"prometheus_info,omitempty"`
+	LokiInfo           []types.DatasourceInfo `json:"loki_info,omitempty"`
+	EthNodeAvailable   bool                   `json:"ethnode_available,omitempty"`
+	EmbeddingAvailable bool                   `json:"embedding_available,omitempty"`
+	EmbeddingModel     string                 `json:"embedding_model,omitempty"`
+}
+
+// datasourcesResponseWire is the on-the-wire shape of DatasourcesResponse,
+// carrying both the name-only lists and the detailed *Info lists.
+type datasourcesResponseWire struct {
 	ClickHouse         []string               `json:"clickhouse,omitempty"`
 	Prometheus         []string               `json:"prometheus,omitempty"`
 	Loki               []string               `json:"loki,omitempty"`
@@ -328,13 +361,70 @@ type DatasourcesResponse struct {
 	EmbeddingModel     string                 `json:"embedding_model,omitempty"`
 }
 
+// MarshalJSON emits both the detailed *Info lists and the derived name-only
+// lists so older peers that only read the name lists continue to work.
+func (d DatasourcesResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(datasourcesResponseWire{
+		ClickHouse:         datasourceNames(d.ClickHouseInfo),
+		Prometheus:         datasourceNames(d.PrometheusInfo),
+		Loki:               datasourceNames(d.LokiInfo),
+		ClickHouseInfo:     d.ClickHouseInfo,
+		PrometheusInfo:     d.PrometheusInfo,
+		LokiInfo:           d.LokiInfo,
+		EthNodeAvailable:   d.EthNodeAvailable,
+		EmbeddingAvailable: d.EmbeddingAvailable,
+		EmbeddingModel:     d.EmbeddingModel,
+	})
+}
+
+// UnmarshalJSON reads the detailed *Info lists when present and otherwise
+// reconstructs them from the name-only lists emitted by older peers.
+func (d *DatasourcesResponse) UnmarshalJSON(data []byte) error {
+	var wire datasourcesResponseWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	d.ClickHouseInfo = infoFromWire("clickhouse", wire.ClickHouseInfo, wire.ClickHouse)
+	d.PrometheusInfo = infoFromWire("prometheus", wire.PrometheusInfo, wire.Prometheus)
+	d.LokiInfo = infoFromWire("loki", wire.LokiInfo, wire.Loki)
+	d.EthNodeAvailable = wire.EthNodeAvailable
+	d.EmbeddingAvailable = wire.EmbeddingAvailable
+	d.EmbeddingModel = wire.EmbeddingModel
+
+	return nil
+}
+
+// datasourceNames returns the non-empty names from a list of DatasourceInfo.
+func datasourceNames(infos []types.DatasourceInfo) []string {
+	if len(infos) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(infos))
+	for _, info := range infos {
+		if info.Name != "" {
+			names = append(names, info.Name)
+		}
+	}
+
+	return names
+}
+
+// infoFromWire prefers the detailed info list and falls back to synthesizing
+// info entries from a name-only list (older peers).
+func infoFromWire(kind string, infos []types.DatasourceInfo, names []string) []types.DatasourceInfo {
+	if len(infos) > 0 {
+		return normalizeInfo(kind, infos, "")
+	}
+
+	return namesToInfo(kind, names, "")
+}
+
 // handleDatasources returns the list of available datasources,
 // filtered by the authenticated user's org membership.
 func (s *server) handleDatasources(w http.ResponseWriter, r *http.Request) {
 	info := DatasourcesResponse{
-		ClickHouse:         s.ClickHouseDatasources(),
-		Prometheus:         s.PrometheusDatasources(),
-		Loki:               s.LokiDatasources(),
 		ClickHouseInfo:     s.ClickHouseDatasourceInfo(),
 		PrometheusInfo:     s.PrometheusDatasourceInfo(),
 		LokiInfo:           s.LokiDatasourceInfo(),
@@ -527,9 +617,13 @@ func (s *server) Stop(ctx context.Context) error {
 		s.log.WithError(err).Warn("Error stopping authenticator")
 	}
 
-	// Stop rate limiter.
+	// Stop rate limiters.
 	if s.rateLimiter != nil {
 		s.rateLimiter.Stop()
+	}
+
+	if s.githubTriggerLimiter != nil {
+		s.githubTriggerLimiter.Stop()
 	}
 
 	// Close embedding service.
@@ -629,6 +723,42 @@ func (s *server) ClickHouseDatasourceInfo() []types.DatasourceInfo {
 	}
 
 	return result
+}
+
+// ClickHouseQuery runs a ClickHouse SQL query against the named datasource by
+// dispatching through the proxy's own /clickhouse/ route, so the same auth,
+// authorization, and credential injection apply as for external callers.
+func (s *server) ClickHouseQuery(ctx context.Context, datasource, sql string, params url.Values) ([]byte, error) {
+	if datasource == "" {
+		return nil, fmt.Errorf("datasource name is required")
+	}
+
+	if s.cfg.Auth.Mode != AuthModeNone {
+		return nil, fmt.Errorf(
+			"in-process ClickHouseQuery requires proxy auth.mode=%q; configured auth.mode=%q cannot supply a request identity",
+			AuthModeNone,
+			s.cfg.Auth.Mode,
+		)
+	}
+
+	requestURL := "/clickhouse/"
+	if encoded := params.Encode(); encoded != "" {
+		requestURL += "?" + encoded
+	}
+
+	req := httptest.NewRequest(http.MethodPost, requestURL, strings.NewReader(sql)).WithContext(ctx)
+	req.Header.Set(handlers.DatasourceHeader, datasource)
+	req.Header.Set("Content-Type", "text/plain")
+
+	rec := httptest.NewRecorder()
+	s.mux.ServeHTTP(rec, req)
+
+	body := rec.Body.Bytes()
+	if rec.Code < 200 || rec.Code >= 300 {
+		return nil, fmt.Errorf("query failed (%d): %s", rec.Code, strings.TrimSpace(string(body)))
+	}
+
+	return body, nil
 }
 
 // PrometheusDatasources returns the list of Prometheus datasource names.

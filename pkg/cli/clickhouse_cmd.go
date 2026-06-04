@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"encoding/csv"
 	"fmt"
 
@@ -13,7 +12,7 @@ var clickhouseCmd = &cobra.Command{
 	GroupID: groupDirect,
 	Use:     "clickhouse",
 	Short:   "Query ClickHouse databases",
-	Long: `Execute SQL queries against ClickHouse clusters.
+	Long: `Execute SQL queries against ClickHouse datasources.
 
 Examples:
   panda clickhouse list-datasources
@@ -35,8 +34,8 @@ func init() {
 var clickhouseListDatasourcesCmd = &cobra.Command{
 	Use:   "list-datasources",
 	Short: "List available ClickHouse datasources",
-	RunE: func(_ *cobra.Command, _ []string) error {
-		response, err := runServerOperation("clickhouse.list_datasources", map[string]any{})
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		response, err := runServerOperation(cmd, "clickhouse.list_datasources", map[string]any{})
 		if err != nil {
 			return err
 		}
@@ -57,8 +56,8 @@ Examples:
   panda clickhouse query clickhouse-raw "SELECT count() FROM beacon_api_eth_v1_events_block WHERE meta_network_name = 'mainnet' AND slot_start_date_time > now() - INTERVAL 1 HOUR"
   panda clickhouse query clickhouse-refined "SELECT count() FROM mainnet.fct_block_head FINAL WHERE slot_start_date_time > now() - INTERVAL 1 HOUR"`,
 	Args: cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		return runClickHouseOperation("clickhouse.query", args[0], args[1], false)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runClickHouseOperation(cmd, "clickhouse.query", args[0], args[1], false)
 	},
 }
 
@@ -66,15 +65,13 @@ var clickhouseQueryRawCmd = &cobra.Command{
 	Use:   "query-raw <datasource> <sql>",
 	Short: "Execute a SQL query and return raw rows (always JSON)",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		return runClickHouseOperation("clickhouse.query_raw", args[0], args[1], true)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runClickHouseOperation(cmd, "clickhouse.query_raw", args[0], args[1], true)
 	},
 }
 
-func runClickHouseOperation(operationID, datasource, sql string, raw bool) error {
-	ctx := context.Background()
-
-	response, err := serverOperationRaw(ctx, operationID, map[string]any{
+func runClickHouseOperation(cmd *cobra.Command, operationID, datasource, sql string, raw bool) error {
+	response, err := serverOperationRaw(commandContext(cmd), operationID, map[string]any{
 		"datasource": datasource,
 		"sql":        sql,
 	})

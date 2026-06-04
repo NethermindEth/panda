@@ -98,13 +98,13 @@ func (a *App) Build(ctx context.Context) error {
 	// a no-op until the first background tick.
 	proxyClient, err := a.buildProxyClient(ctx, a.refreshModulesFromDiscovery)
 	if err != nil {
-		a.stop(ctx)
+		_ = a.stop(ctx)
 
 		return fmt.Errorf("building proxy client: %w", err)
 	}
 
 	if err := proxyClient.Start(ctx); err != nil {
-		a.stop(ctx)
+		_ = a.stop(ctx)
 
 		return fmt.Errorf("starting proxy client: %w", err)
 	}
@@ -114,7 +114,7 @@ func (a *App) Build(ctx context.Context) error {
 
 	// 4. Initialize modules.
 	if err := a.initModules(proxyClient); err != nil {
-		a.stop(ctx)
+		_ = a.stop(ctx)
 
 		return fmt.Errorf("initializing modules: %w", err)
 	}
@@ -123,7 +123,7 @@ func (a *App) Build(ctx context.Context) error {
 	a.injectProxyClient()
 
 	if err := a.ModuleRegistry.StartAll(ctx); err != nil {
-		a.stop(ctx)
+		_ = a.stop(ctx)
 
 		return fmt.Errorf("starting modules: %w", err)
 	}
@@ -138,7 +138,7 @@ func (a *App) Build(ctx context.Context) error {
 	})
 
 	if err := cartographoorClient.Start(ctx); err != nil {
-		a.stop(ctx)
+		_ = a.stop(ctx)
 
 		return fmt.Errorf("starting cartographoor client: %w", err)
 	}

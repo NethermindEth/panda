@@ -72,10 +72,50 @@ func TestDeepMerge(t *testing.T) {
 			expected: map[string]any{"a": "scalar"},
 		},
 		{
+			name:     "empty list overlay replaces base list",
+			base:     map[string]any{"proxies": []any{map[string]any{"name": "hosted"}}},
+			overlay:  map[string]any{"proxies": []any{}},
+			expected: map[string]any{"proxies": []any{}},
+		},
+		{
 			name:     "does not mutate base",
 			base:     map[string]any{"a": 1},
 			overlay:  map[string]any{"a": 2},
 			expected: map[string]any{"a": 2},
+		},
+		{
+			name: "list maps merge by index",
+			base: map[string]any{
+				"proxies": []any{
+					map[string]any{
+						"name": "hosted",
+						"url":  "https://old.example",
+						"auth": map[string]any{"mode": "oidc"},
+					},
+					map[string]any{
+						"name": "lab",
+						"url":  "http://lab.example:18081",
+					},
+				},
+			},
+			overlay: map[string]any{
+				"proxies": []any{
+					map[string]any{"url": "https://new.example"},
+				},
+			},
+			expected: map[string]any{
+				"proxies": []any{
+					map[string]any{
+						"name": "hosted",
+						"url":  "https://new.example",
+						"auth": map[string]any{"mode": "oidc"},
+					},
+					map[string]any{
+						"name": "lab",
+						"url":  "http://lab.example:18081",
+					},
+				},
+			},
 		},
 	}
 
@@ -97,6 +137,7 @@ func TestSetNestedValue(t *testing.T) {
 
 	setNestedValue(m, []string{"sandbox", "timeout"}, 120)
 	setNestedValue(m, []string{"sandbox", "sessions", "max_sessions"}, 20)
+	setNestedValue(m, []string{"proxies", "0", "url"}, "https://proxy.example")
 
 	sandbox, ok := m["sandbox"].(map[string]any)
 	require.True(t, ok)
@@ -105,13 +146,22 @@ func TestSetNestedValue(t *testing.T) {
 	sessions, ok := sandbox["sessions"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, 20, sessions["max_sessions"])
+
+	proxies, ok := m["proxies"].([]any)
+	require.True(t, ok)
+	require.Len(t, proxies, 1)
+
+	proxy, ok := proxies[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "https://proxy.example", proxy["url"])
 }
 
 func TestBuildOverrideMap(t *testing.T) {
 	fields := []OverrideField{
-		{Path: "sandbox.timeout", Value: 120, Default: 60},              // changed
-		{Path: "sandbox.memory_limit", Value: "2g", Default: "2g"},      // unchanged
-		{Path: "sandbox.sessions.max_sessions", Value: 20, Default: 10}, // changed
+		{Path: "sandbox.timeout", Value: 120, Default: 60},                   // changed
+		{Path: "sandbox.memory_limit", Value: "2g", Default: "2g"},           // unchanged
+		{Path: "sandbox.sessions.max_sessions", Value: 20, Default: 10},      // changed
+		{Path: "proxies.0.url", Value: "https://proxy.example", Default: ""}, // changed
 	}
 
 	result := BuildOverrideMap(fields)
@@ -124,6 +174,14 @@ func TestBuildOverrideMap(t *testing.T) {
 	sessions, ok := sandbox["sessions"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, 20, sessions["max_sessions"])
+
+	proxies, ok := result["proxies"].([]any)
+	require.True(t, ok)
+	require.Len(t, proxies, 1)
+
+	proxy, ok := proxies[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "https://proxy.example", proxy["url"])
 }
 
 func TestSaveAndLoadUserConfig(t *testing.T) {

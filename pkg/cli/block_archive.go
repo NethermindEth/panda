@@ -29,13 +29,13 @@ var blockArchiveNetworksCmd = &cobra.Command{
 	Use:   "networks",
 	Short: "List networks served by the archive (active by default; use --all to include inactive)",
 	Args:  cobra.NoArgs,
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		args := map[string]any{}
 		if !blockArchiveNetworksAll {
 			args["active"] = true
 		}
 
-		response, err := runServerOperation("block_archive.list_networks", args)
+		response, err := runServerOperation(cmd, "block_archive.list_networks", args)
 		if err != nil {
 			return err
 		}
@@ -50,8 +50,8 @@ var blockArchiveDownloadCmd = &cobra.Command{
 	Use:   "download <network> <slot> <block-root>",
 	Short: "Download the SSZ bytes for a block",
 	Args:  cobra.ExactArgs(3),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperationRaw("block_archive.download_ssz", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperationRaw(cmd, "block_archive.download_ssz", map[string]any{
 			"network":    args[0],
 			"slot":       args[1],
 			"block_root": args[2],
@@ -79,8 +79,8 @@ var blockArchiveGetCmd = &cobra.Command{
 	Use:   "get <network> <slot> <block-root>",
 	Short: "Get the decoded JSON SignedBeaconBlock (always JSON)",
 	Args:  cobra.ExactArgs(3),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperationRaw("block_archive.get_block_json", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperationRaw(cmd, "block_archive.get_block_json", map[string]any{
 			"network":    args[0],
 			"slot":       args[1],
 			"block_root": args[2],
@@ -97,8 +97,8 @@ var blockArchiveLinkCmd = &cobra.Command{
 	Use:   "link <network> <slot> <block-root>",
 	Short: "Print a browser link for a (network, slot, block_root)",
 	Args:  cobra.ExactArgs(3),
-	RunE: func(_ *cobra.Command, args []string) error {
-		response, err := runServerOperation("block_archive.link", map[string]any{
+	RunE: func(cmd *cobra.Command, args []string) error {
+		response, err := runServerOperation(cmd, "block_archive.link", map[string]any{
 			"network":    args[0],
 			"slot":       args[1],
 			"block_root": args[2],

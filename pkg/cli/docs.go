@@ -36,12 +36,12 @@ func init() {
 // completeDocsModules completes the docs positional arg with the live module
 // set provided by the server, keeping completion in sync with what 'panda docs'
 // actually accepts.
-func completeDocsModules(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+func completeDocsModules(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	allDocs, err := getAllPythonAPIDocs(context.Background())
+	allDocs, err := getAllPythonAPIDocs(commandContext(cmd))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -54,8 +54,8 @@ func completeDocsModules(_ *cobra.Command, args []string, _ string) ([]string, c
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-func runDocs(_ *cobra.Command, args []string) error {
-	allDocs, err := getAllPythonAPIDocs(context.Background())
+func runDocs(cmd *cobra.Command, args []string) error {
+	allDocs, err := getAllPythonAPIDocs(cmd.Context())
 	if err != nil {
 		return err
 	}

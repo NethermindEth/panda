@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"sort"
 
@@ -15,27 +14,26 @@ var datasourcesCmd = &cobra.Command{
 	Use:     "datasources",
 	Short:   "List available datasources from the server",
 	Long: `List all datasources exposed by the configured server, including
-ClickHouse clusters, Prometheus instances, and Loki instances.
+ClickHouse, Prometheus, Loki, Ethnode, and other discovered types.
 
 Examples:
   panda datasources                     # List all datasources
-  panda datasources --type clickhouse   # List only ClickHouse clusters
+  panda datasources --type clickhouse   # List only ClickHouse datasources
   panda datasources --json              # Output as JSON`,
 	RunE: runDatasources,
 }
 
 func init() {
 	rootCmd.AddCommand(datasourcesCmd)
-	datasourcesCmd.Flags().StringVar(&datasourcesType, "type", "", "Filter by type (clickhouse, prometheus, loki)")
+	datasourcesCmd.Flags().StringVar(&datasourcesType, "type", "", "Filter by type (clickhouse, prometheus, loki, ethnode)")
 
 	_ = datasourcesCmd.RegisterFlagCompletionFunc("type", cobra.FixedCompletions(
-		[]string{"clickhouse", "prometheus", "loki"}, cobra.ShellCompDirectiveNoFileComp,
+		[]string{"clickhouse", "prometheus", "loki", "ethnode"}, cobra.ShellCompDirectiveNoFileComp,
 	))
 }
 
-func runDatasources(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-	response, err := listDatasources(ctx, datasourcesType)
+func runDatasources(cmd *cobra.Command, _ []string) error {
+	response, err := listDatasources(cmd.Context(), datasourcesType)
 	if err != nil {
 		return fmt.Errorf("listing datasources: %w", err)
 	}

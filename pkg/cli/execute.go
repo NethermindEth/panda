@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -61,14 +60,13 @@ func init() {
 	_ = executeCmd.RegisterFlagCompletionFunc("session", completeSessionIDs)
 }
 
-func runExecute(_ *cobra.Command, _ []string) error {
+func runExecute(cmd *cobra.Command, _ []string) error {
 	code, err := resolveCode()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	result, err := executeCodeRemotely(ctx, serverapi.ExecuteRequest{
+	result, err := executeCodeRemotely(cmd.Context(), serverapi.ExecuteRequest{
 		Code:      code,
 		Timeout:   executeTimeout,
 		SessionID: executeSession,

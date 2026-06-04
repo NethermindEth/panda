@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/spf13/cobra"
+
 	clickhousemodule "github.com/ethpandaops/panda/modules/clickhouse"
 	"github.com/ethpandaops/panda/pkg/config"
 	"github.com/ethpandaops/panda/pkg/operations"
@@ -183,12 +185,12 @@ func serverOperationRaw(ctx context.Context, operationID string, args map[string
 	}, nil
 }
 
-func runServerOperation(operationID string, args map[string]any) (*operations.Response, error) {
-	return serverOperation(context.Background(), operationID, args)
+func runServerOperation(cmd *cobra.Command, operationID string, args map[string]any) (*operations.Response, error) {
+	return serverOperation(commandContext(cmd), operationID, args)
 }
 
-func runServerOperationRaw(operationID string, args map[string]any) (*rawServerResponse, error) {
-	return serverOperationRaw(context.Background(), operationID, args)
+func runServerOperationRaw(cmd *cobra.Command, operationID string, args map[string]any) (*rawServerResponse, error) {
+	return serverOperationRaw(commandContext(cmd), operationID, args)
 }
 
 func listDatasources(ctx context.Context, filterType string) (*serverapi.DatasourcesResponse, error) {
@@ -455,7 +457,7 @@ func decodeAPIError(status int, data []byte) error {
 func serverErrorHint(status int, _ string) string {
 	switch status {
 	case http.StatusNotFound:
-		return "the panda server does not appear to be running at this address — start it with 'panda server start'"
+		return "the requested module, operation, datasource, or resource is not available on this server; check 'panda datasources' and 'panda resources list'"
 	case http.StatusServiceUnavailable:
 		return "the server is running but a required service (e.g. sandbox) is not available — check server logs with 'docker compose logs server'"
 	default:

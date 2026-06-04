@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"sort"
 
@@ -44,10 +43,8 @@ func init() {
 	resourcesCmd.AddCommand(resourcesReadCmd)
 }
 
-func runResourcesList(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
-
-	response, err := listResources(ctx)
+func runResourcesList(cmd *cobra.Command, _ []string) error {
+	response, err := listResources(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("listing resources: %w", err)
 	}
@@ -93,10 +90,8 @@ func runResourcesList(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runResourcesRead(_ *cobra.Command, args []string) error {
-	ctx := context.Background()
-
-	response, err := readResource(ctx, args[0])
+func runResourcesRead(cmd *cobra.Command, args []string) error {
+	response, err := readResource(cmd.Context(), args[0])
 	if err != nil {
 		return fmt.Errorf("reading resource: %w", err)
 	}

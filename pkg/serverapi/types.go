@@ -81,7 +81,7 @@ type SearchExampleResult struct {
 	ExampleName     string  `json:"example_name"`
 	Description     string  `json:"description"`
 	Query           string  `json:"query"`
-	TargetCluster   string  `json:"target_cluster"`
+	Target          string  `json:"target"`
 	SimilarityScore float64 `json:"similarity_score"`
 }
 
