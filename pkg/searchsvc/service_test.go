@@ -2,6 +2,7 @@ package searchsvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -189,8 +190,8 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 	t.Parallel()
 
 	results := []resource.SearchResult{
-		{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "high"}, Score: 0.9},
-		{CategoryKey: "attestations", CategoryName: "Attestations", Example: types.Example{Name: "mid"}, Score: 0.5},
+		{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "high", Target: "xatu"}, Score: 0.9},
+		{CategoryKey: "attestations", CategoryName: "Attestations", Example: types.Example{Name: "mid", Target: "prometheus"}, Score: 0.5},
 		{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "below-threshold"}, Score: 0.1},
 	}
 
@@ -209,8 +210,14 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Len(t, resp.Results, 2)
+		assert.Equal(t, "xatu", resp.Results[0].Target)
 		assert.Equal(t, []string{"attestations", "blocks"}, resp.AvailableCategories)
 		assert.Equal(t, 5, searcher.lastLimit, "no filter uses limit directly")
+
+		encoded, err := json.Marshal(resp.Results[0])
+		require.NoError(t, err)
+		assert.Contains(t, string(encoded), `"target":"xatu"`)
+		assert.NotContains(t, string(encoded), "target_cluster")
 	})
 
 	t.Run("category filter restricts results and overscans", func(t *testing.T) {

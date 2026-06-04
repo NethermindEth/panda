@@ -85,6 +85,15 @@ func (s *service) handleEthNodeListDatasources(w http.ResponseWriter) {
 }
 
 func (s *service) handleEthNodeListNetworks(w http.ResponseWriter) {
+	if !s.proxyService.EthNodeAvailable() {
+		writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
+			Kind: operations.ResultKindObject,
+			Data: map[string]any{"networks": []listItem{}},
+		})
+
+		return
+	}
+
 	if s.cartographoorClient == nil {
 		writeAPIError(w, http.StatusServiceUnavailable, "ethnode network discovery is unavailable")
 		return

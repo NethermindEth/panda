@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -120,5 +121,69 @@ func TestDatasourceInfoIncludesProxyName(t *testing.T) {
 	}
 	if prometheus[0].ProxyName != "hosted" {
 		t.Fatalf("PrometheusDatasourceInfo()[0].ProxyName = %q, want hosted", prometheus[0].ProxyName)
+	}
+}
+
+func TestClickHouseQueryUsesRequestContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	const responseDelay = 75 * time.Millisecond
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(responseDelay)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(srv.Close)
+
+	log := logrus.New()
+	log.SetOutput(io.Discard)
+
+	client := NewClient(log, ClientConfig{
+		URL:         srv.URL,
+		HTTPTimeout: 25 * time.Millisecond,
+	}).(*proxyClient)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	start := time.Now()
+	body, err := client.ClickHouseQuery(ctx, "xatu", "SELECT 1", nil)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ClickHouseQuery error = %v", err)
+	}
+	if string(body) != "ok" {
+		t.Fatalf("ClickHouseQuery body = %q, want ok", body)
+	}
+	if elapsed < responseDelay {
+		t.Fatalf("ClickHouseQuery elapsed = %v, want at least %v", elapsed, responseDelay)
+	}
+}
+
+func TestClickHouseQueryUsesHTTPTimeoutWithoutRequestDeadline(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(srv.Close)
+
+	log := logrus.New()
+	log.SetOutput(io.Discard)
+
+	client := NewClient(log, ClientConfig{
+		URL:         srv.URL,
+		HTTPTimeout: 25 * time.Millisecond,
+	}).(*proxyClient)
+
+	start := time.Now()
+	_, err := client.ClickHouseQuery(context.Background(), "xatu", "SELECT 1", nil)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("ClickHouseQuery error = nil, want timeout")
+	}
+	if elapsed >= time.Second {
+		t.Fatalf("ClickHouseQuery elapsed = %v, want HTTPTimeout fallback to fire quickly", elapsed)
 	}
 }

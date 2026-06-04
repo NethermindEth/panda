@@ -1,8 +1,38 @@
 package resource
 
 import (
+	"io"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ethpandaops/panda/pkg/types"
 )
+
+type captureEmbedder struct {
+	texts []string
+}
+
+func (e *captureEmbedder) Embed(text string) ([]float32, error) {
+	e.texts = append(e.texts, text)
+
+	return []float32{1}, nil
+}
+
+func (e *captureEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
+	e.texts = append(e.texts, texts...)
+
+	vectors := make([][]float32, len(texts))
+	for i := range vectors {
+		vectors[i] = []float32{1}
+	}
+
+	return vectors, nil
+}
+
+func (e *captureEmbedder) Close() error { return nil }
 
 func TestExtractTableNames(t *testing.T) {
 	tests := []struct {
@@ -57,4 +87,26 @@ func TestExtractTableNames(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExampleIndexEmbeddingTextUsesTargetLabel(t *testing.T) {
+	embedder := &captureEmbedder{}
+	log := logrus.New()
+	log.SetOutput(io.Discard)
+
+	_, err := NewExampleIndex(log, embedder, map[string]types.ExampleCategory{
+		"prometheus": {
+			Name: "Prometheus",
+			Examples: []types.Example{{
+				Name:        "Active targets",
+				Description: "Find active scrape targets.",
+				Query:       "up",
+				Target:      "prometheus",
+			}},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, embedder.texts, 1)
+	assert.Contains(t, embedder.texts[0], "Target: prometheus")
+	assert.NotContains(t, embedder.texts[0], "Cluster:")
 }

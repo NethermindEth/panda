@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ethpandaops/panda/pkg/serverapi"
 )
 
 func TestParseClickHouseTSV(t *testing.T) {
@@ -94,6 +96,22 @@ func TestFormatLabelSet(t *testing.T) {
 			assert.Equal(t, tt.want, formatLabelSet(tt.labels, tt.quoteValues))
 		})
 	}
+}
+
+func TestPrintExampleResultsUsesNeutralTargetLabel(t *testing.T) {
+	output := captureStdout(t, func() {
+		printExampleResults([]*serverapi.SearchExampleResult{{
+			CategoryName:    "Prometheus",
+			ExampleName:     "Validator duty metrics",
+			Description:     "Inspect validator duty latency.",
+			Query:           "up",
+			Target:          "prometheus",
+			SimilarityScore: 0.8,
+		}})
+	})
+
+	assert.Contains(t, output, "  Target: prometheus")
+	assert.NotContains(t, output, "Cluster:")
 }
 
 func TestIntFromAny(t *testing.T) {

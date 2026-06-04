@@ -77,7 +77,7 @@ type SearchExampleResult struct {
 	ExampleName     string  `json:"example_name"`
 	Description     string  `json:"description"`
 	Query           string  `json:"query"`
-	TargetCluster   string  `json:"target_cluster"`
+	Target          string  `json:"target"`
 	SimilarityScore float64 `json:"similarity_score"`
 }
 
@@ -277,7 +277,7 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 			ExampleName:     result.Example.Name,
 			Description:     result.Example.Description,
 			Query:           result.Example.Query,
-			TargetCluster:   result.Example.Target,
+			Target:          result.Example.Target,
 			SimilarityScore: result.Score,
 		})
 

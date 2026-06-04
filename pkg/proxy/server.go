@@ -733,6 +733,14 @@ func (s *server) ClickHouseQuery(ctx context.Context, datasource, sql string, pa
 		return nil, fmt.Errorf("datasource name is required")
 	}
 
+	if s.cfg.Auth.Mode != AuthModeNone {
+		return nil, fmt.Errorf(
+			"in-process ClickHouseQuery requires proxy auth.mode=%q; configured auth.mode=%q cannot supply a request identity",
+			AuthModeNone,
+			s.cfg.Auth.Mode,
+		)
+	}
+
 	requestURL := "/clickhouse/"
 	if encoded := params.Encode(); encoded != "" {
 		requestURL += "?" + encoded

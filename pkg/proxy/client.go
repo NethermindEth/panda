@@ -88,11 +88,12 @@ func (c *ClientConfig) ApplyDefaults() {
 
 // proxyClient implements Client for connecting to a proxy server.
 type proxyClient struct {
-	log        logrus.FieldLogger
-	cfg        ClientConfig
-	httpClient *http.Client
-	authClient client.Client
-	credStore  store.Store
+	log             logrus.FieldLogger
+	cfg             ClientConfig
+	httpClient      *http.Client
+	queryHTTPClient *http.Client
+	authClient      client.Client
+	credStore       store.Store
 
 	mu          sync.RWMutex
 	datasources *DatasourcesResponse
@@ -111,16 +112,18 @@ var (
 // NewClient creates a new proxy client.
 func NewClient(log logrus.FieldLogger, cfg ClientConfig) Client {
 	cfg.ApplyDefaults()
+	transport := &version.Transport{}
 
 	c := &proxyClient{
 		log: log.WithField("component", "proxy-client"),
 		cfg: cfg,
 		httpClient: &http.Client{
-			Transport: &version.Transport{},
+			Transport: transport,
 			Timeout:   cfg.HTTPTimeout,
 		},
-		datasources: &DatasourcesResponse{},
-		stopCh:      make(chan struct{}),
+		queryHTTPClient: &http.Client{Transport: transport},
+		datasources:     &DatasourcesResponse{},
+		stopCh:          make(chan struct{}),
 	}
 
 	// Set up auth client and credential store if OIDC is configured.
@@ -296,6 +299,12 @@ func (c *proxyClient) ClickHouseQuery(ctx context.Context, datasource, sql strin
 		return nil, fmt.Errorf("datasource name is required")
 	}
 
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.cfg.HTTPTimeout)
+		defer cancel()
+	}
+
 	baseURL := strings.TrimRight(c.cfg.URL, "/")
 	if baseURL == "" {
 		return nil, fmt.Errorf("proxy URL is empty")
@@ -318,7 +327,7 @@ func (c *proxyClient) ClickHouseQuery(ctx context.Context, datasource, sql strin
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.queryHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing query: %w", err)
 	}

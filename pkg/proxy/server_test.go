@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -567,5 +568,90 @@ func TestBrandingEndpointReturns204WhenNotConfigured(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
+	}
+}
+
+func TestServerClickHouseQueryRejectsAuthModesRequiringIdentity(t *testing.T) {
+	t.Parallel()
+
+	for _, mode := range []AuthMode{AuthModeOAuth, AuthModeOIDC} {
+		t.Run(string(mode), func(t *testing.T) {
+			t.Parallel()
+
+			srv := &server{cfg: ServerConfig{Auth: AuthConfig{Mode: mode}}}
+
+			_, err := srv.ClickHouseQuery(context.Background(), "xatu", "SELECT 1", nil)
+			if err == nil {
+				t.Fatal("ClickHouseQuery error = nil, want auth mode guard")
+			}
+			if !strings.Contains(err.Error(), `requires proxy auth.mode="none"`) {
+				t.Fatalf("ClickHouseQuery error = %q, want clear auth.mode=none configuration error", err)
+			}
+		})
+	}
+}
+
+func TestServerClickHouseQueryRoutesInNoAuthMode(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("upstream method = %s, want POST", r.Method)
+		}
+		if got := r.URL.Query().Get("default_format"); got != "JSON" {
+			t.Fatalf("upstream default_format = %q, want JSON", got)
+		}
+		if got := r.URL.Query().Get("database"); got != "default" {
+			t.Fatalf("upstream database = %q, want default", got)
+		}
+
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(upstream.Close)
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("parse upstream URL: %v", err)
+	}
+
+	host, portValue, err := net.SplitHostPort(upstreamURL.Host)
+	if err != nil {
+		t.Fatalf("split upstream host: %v", err)
+	}
+
+	port, err := strconv.Atoi(portValue)
+	if err != nil {
+		t.Fatalf("parse upstream port: %v", err)
+	}
+
+	cfg := ServerConfig{
+		Auth: AuthConfig{Mode: AuthModeNone},
+		ClickHouse: []ClickHouseClusterConfig{
+			{
+				BaseDatasourceConfig: BaseDatasourceConfig{Name: "xatu"},
+				Host:                 host,
+				Port:                 port,
+				Database:             "default",
+			},
+		},
+	}
+	cfg.ApplyDefaults()
+
+	srv, err := newServer(logrus.New(), cfg, "http://proxy.test", "18081")
+	if err != nil {
+		t.Fatalf("newServer failed: %v", err)
+	}
+
+	body, err := srv.ClickHouseQuery(
+		context.Background(),
+		"xatu",
+		"SELECT 1",
+		url.Values{"default_format": {"JSON"}},
+	)
+	if err != nil {
+		t.Fatalf("ClickHouseQuery error = %v", err)
+	}
+	if string(body) != "ok" {
+		t.Fatalf("ClickHouseQuery body = %q, want ok", body)
 	}
 }

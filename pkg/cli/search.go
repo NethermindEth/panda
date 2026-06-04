@@ -319,8 +319,8 @@ func printExampleResults(results []*serverapi.SearchExampleResult) {
 			result.CategoryName, result.ExampleName, result.SimilarityScore)
 		fmt.Printf("  %s\n", result.Description)
 
-		if result.TargetCluster != "" {
-			fmt.Printf("  Cluster: %s\n", result.TargetCluster)
+		if result.Target != "" {
+			fmt.Printf("  Target: %s\n", result.Target)
 		}
 
 		fmt.Printf("\n%s\n\n", result.Query)
