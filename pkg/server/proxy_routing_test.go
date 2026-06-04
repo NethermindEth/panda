@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -275,6 +276,10 @@ func (c *routingProxyClient) EmbeddingModel() string           { return "" }
 func (c *routingProxyClient) Discover(_ context.Context) error { return nil }
 func (c *routingProxyClient) EnsureAuthenticated(_ context.Context) error {
 	return nil
+}
+
+func (c *routingProxyClient) ClickHouseQuery(_ context.Context, _, _ string, _ url.Values) ([]byte, error) {
+	return nil, nil
 }
 
 func datasourceNames(infos []types.DatasourceInfo) []string {

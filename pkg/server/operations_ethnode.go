@@ -69,6 +69,10 @@ func (s *service) handleEthNodeOperation(operationID string, w http.ResponseWrit
 }
 
 func (s *service) handleEthNodeListDatasources(w http.ResponseWriter) {
+	if !s.ethNodeAvailable(w) {
+		return
+	}
+
 	items := make([]listItem, 0)
 	for _, info := range s.proxyService.EthNodeDatasourceInfo() {
 		items = append(items, listItem{
@@ -85,12 +89,7 @@ func (s *service) handleEthNodeListDatasources(w http.ResponseWriter) {
 }
 
 func (s *service) handleEthNodeListNetworks(w http.ResponseWriter) {
-	if !s.proxyService.EthNodeAvailable() {
-		writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
-			Kind: operations.ResultKindObject,
-			Data: map[string]any{"networks": []listItem{}},
-		})
-
+	if !s.ethNodeAvailable(w) {
 		return
 	}
 
@@ -116,6 +115,16 @@ func (s *service) handleEthNodeListNetworks(w http.ResponseWriter) {
 		Kind: operations.ResultKindObject,
 		Data: map[string]any{"networks": items},
 	})
+}
+
+func (s *service) ethNodeAvailable(w http.ResponseWriter) bool {
+	if s.proxyService.EthNodeAvailable() {
+		return true
+	}
+
+	writeAPIError(w, http.StatusServiceUnavailable, "Ethnode is not enabled or no node access is available.")
+
+	return false
 }
 
 func (s *service) handleEthNodeBeaconGet(w http.ResponseWriter, r *http.Request) {

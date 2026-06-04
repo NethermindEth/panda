@@ -19,25 +19,22 @@ import (
 	"github.com/ethpandaops/panda/pkg/types"
 )
 
-func TestEthNodeListNetworksReturnsEmptyWhenEthNodeUnavailable(t *testing.T) {
+func TestEthNodeListOperationsReturnUnavailableWhenEthNodeUnavailable(t *testing.T) {
 	t.Parallel()
 
-	svc := newEthNodeOperationService(false)
-	rec := httptest.NewRecorder()
+	for _, operationID := range []string{"ethnode.list_datasources", "ethnode.list_networks"} {
+		t.Run(operationID, func(t *testing.T) {
+			t.Parallel()
 
-	handled := svc.handleEthNodeOperation("ethnode.list_networks", rec, newEthNodeOpRequest(t))
-	require.True(t, handled)
-	require.Equal(t, http.StatusOK, rec.Code)
+			svc := newEthNodeOperationService(false)
+			rec := httptest.NewRecorder()
 
-	var resp struct {
-		Kind string `json:"kind"`
-		Data struct {
-			Networks []listItem `json:"networks"`
-		} `json:"data"`
+			handled := svc.handleEthNodeOperation(operationID, rec, newEthNodeOpRequest(t))
+			require.True(t, handled)
+			require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+			assert.Contains(t, rec.Body.String(), "Ethnode is not enabled or no node access is available.")
+		})
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, operations.ResultKindObject, resp.Kind)
-	assert.Empty(t, resp.Data.Networks)
 }
 
 func TestEthNodeListNetworksRequiresCartographoorWhenEthNodeAvailable(t *testing.T) {
