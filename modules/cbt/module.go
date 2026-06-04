@@ -33,6 +33,13 @@ func New() *Module {
 	return &Module{}
 }
 
+// NetworkBaseURL returns the CBT instance base URL for a network, derived from
+// the standard ethpandaops.io naming convention. Cartographoor discovery does
+// not expose a CBT service URL, so the per-network host is derived here.
+func NetworkBaseURL(network string) string {
+	return fmt.Sprintf("https://cbt.%s.ethpandaops.io", network)
+}
+
 func (m *Module) Name() string { return "cbt" }
 
 // DefaultEnabled implements module.DefaultEnabled.
@@ -60,7 +67,7 @@ func (m *Module) SandboxEnv() (map[string]string, error) {
 	cbtNetworks := make(map[string]string, len(networks))
 
 	for name := range networks {
-		cbtNetworks[name] = fmt.Sprintf("https://cbt.%s.ethpandaops.io", name)
+		cbtNetworks[name] = NetworkBaseURL(name)
 	}
 
 	if len(cbtNetworks) == 0 {

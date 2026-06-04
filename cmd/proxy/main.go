@@ -4,17 +4,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/ethpandaops/panda/internal/version"
+	"github.com/ethpandaops/panda/pkg/config"
+	"github.com/ethpandaops/panda/pkg/observability"
 	"github.com/ethpandaops/panda/pkg/proxy"
 )
 
@@ -71,31 +71,14 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Start metrics server if enabled.
-	var metricsServer *http.Server
-
-	if cfg.Metrics.Enabled {
-		addr := cfg.Metrics.ListenAddr
-
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.Handler())
-
-		metricsServer = &http.Server{
-			Addr:              addr,
-			Handler:           mux,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
-		}
-
-		go func() {
-			log.WithField("addr", addr).Info("Starting metrics server")
-
-			if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.WithError(err).Error("Metrics server error")
-			}
-		}()
+	// Start observability service (metrics).
+	obsSvc := observability.NewService(log, config.ObservabilityConfig{
+		MetricsEnabled: cfg.Metrics.Enabled,
+		MetricsPort:    cfg.Metrics.Port,
+		MetricsAddr:    cfg.Metrics.ListenAddr,
+	})
+	if err := obsSvc.Start(ctx); err != nil {
+		return fmt.Errorf("starting observability: %w", err)
 	}
 
 	// Create the proxy server.
@@ -126,13 +109,8 @@ func runServe(_ *cobra.Command, _ []string) error {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	// Stop metrics server.
-	if metricsServer != nil {
-		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-			log.WithError(err).Warn("Error stopping metrics server")
-		}
-
-		log.Info("Metrics server stopped")
+	if err := obsSvc.Stop(); err != nil {
+		log.WithError(err).Warn("Error stopping observability service")
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {

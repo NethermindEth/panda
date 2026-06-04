@@ -34,7 +34,7 @@ func init() {
 
 var clickhouseListDatasourcesCmd = &cobra.Command{
 	Use:   "list-datasources",
-	Short: "List available ClickHouse clusters",
+	Short: "List available ClickHouse datasources",
 	RunE: func(_ *cobra.Command, _ []string) error {
 		response, err := runServerOperation("clickhouse.list_datasources", map[string]any{})
 		if err != nil {
@@ -46,12 +46,12 @@ var clickhouseListDatasourcesCmd = &cobra.Command{
 }
 
 var clickhouseQueryCmd = &cobra.Command{
-	Use:   "query <cluster> <sql>",
+	Use:   "query <datasource> <sql>",
 	Short: "Execute a SQL query",
-	Long: `Execute a SQL query against a ClickHouse cluster.
+	Long: `Execute a SQL query against a ClickHouse datasource.
 
-The cluster name is typically "clickhouse-raw" or "clickhouse-refined". Use 'panda clickhouse list-datasources'
-to see available clusters.
+The datasource name is typically "clickhouse-raw" or "clickhouse-refined". Use 'panda clickhouse list-datasources'
+to see available datasources.
 
 Examples:
   panda clickhouse query clickhouse-raw "SELECT count() FROM beacon_api_eth_v1_events_block WHERE meta_network_name = 'mainnet' AND slot_start_date_time > now() - INTERVAL 1 HOUR"
@@ -63,7 +63,7 @@ Examples:
 }
 
 var clickhouseQueryRawCmd = &cobra.Command{
-	Use:   "query-raw <cluster> <sql>",
+	Use:   "query-raw <datasource> <sql>",
 	Short: "Execute a SQL query and return raw rows (always JSON)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
@@ -71,12 +71,12 @@ var clickhouseQueryRawCmd = &cobra.Command{
 	},
 }
 
-func runClickHouseOperation(operationID, cluster, sql string, raw bool) error {
+func runClickHouseOperation(operationID, datasource, sql string, raw bool) error {
 	ctx := context.Background()
 
 	response, err := serverOperationRaw(ctx, operationID, map[string]any{
-		"cluster": cluster,
-		"sql":     sql,
+		"datasource": datasource,
+		"sql":        sql,
 	})
 	if err != nil {
 		return err

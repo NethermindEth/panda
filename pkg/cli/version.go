@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -13,20 +13,7 @@ var versionCmd = &cobra.Command{
 	Use:     "version",
 	Short:   "Print version information",
 	RunE: func(_ *cobra.Command, _ []string) error {
-		info := map[string]string{
-			"version":    version.Version,
-			"git_commit": version.GitCommit,
-			"build_time": version.BuildTime,
-		}
-
-		if isJSON() {
-			return printJSON(info)
-		}
-
-		fmt.Printf("panda version %s (commit: %s, built: %s)\n",
-			version.Version, version.GitCommit, version.BuildTime)
-
-		return nil
+		return version.Fprint(os.Stdout, "panda", isJSON())
 	},
 }
 

@@ -13,7 +13,11 @@ def _require_dora_available() -> None:
         raise ValueError("Dora is not enabled or no Dora explorers are available.")
 
 
-def list_networks() -> list[dict[str, str]]:
+def list_networks() -> list[dict[str, Any]]:
+    """List networks with Dora explorers.
+
+    Each entry has keys: name, description, url, type, extra.
+    """
     _require_dora_available()
     data = _runtime.invoke_data("dora.list_networks")
     return data.get("networks", [])

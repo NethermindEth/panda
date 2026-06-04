@@ -137,6 +137,9 @@ func (c *SessionConfig) IsEnabled() bool {
 type ObservabilityConfig struct {
 	MetricsEnabled bool `yaml:"metrics_enabled"`
 	MetricsPort    int  `yaml:"metrics_port"`
+	// MetricsAddr is the full address (host:port) to serve metrics on. When set,
+	// it takes precedence over MetricsPort.
+	MetricsAddr string `yaml:"metrics_addr,omitempty"`
 }
 
 // ProxyConfig holds proxy connection configuration.

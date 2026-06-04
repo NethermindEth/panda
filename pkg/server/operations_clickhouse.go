@@ -24,13 +24,18 @@ func (s *service) handleClickHouseOperation(operationID string, w http.ResponseW
 }
 
 func (s *service) handleClickHouseListDatasources(w http.ResponseWriter) {
-	items := make([]map[string]any, 0)
+	items := make([]listItem, 0)
 	for _, info := range s.proxyService.ClickHouseDatasourceInfo() {
-		items = append(items, map[string]any{
-			"name":        info.Name,
-			"description": info.Description,
-			"database":    info.Metadata["database"],
-		})
+		item := listItem{
+			Name:        info.Name,
+			Description: info.Description,
+			URL:         info.Metadata["url"],
+			Type:        info.Type,
+		}
+		if database := info.Metadata["database"]; database != "" {
+			item.Extra = map[string]any{"database": database}
+		}
+		items = append(items, item)
 	}
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
@@ -46,7 +51,7 @@ func (s *service) handleClickHouseQuery(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	clusterName, err := requiredStringArg(req.Args, "cluster")
+	datasource, err := requiredStringArg(req.Args, "datasource")
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
@@ -66,12 +71,12 @@ func (s *service) handleClickHouseQuery(w http.ResponseWriter, r *http.Request) 
 	body, status, headers, err := s.proxyDatasourceRequest(
 		r.Context(),
 		"clickhouse",
-		clusterName,
+		datasource,
 		http.MethodPost,
 		"/clickhouse/?"+params.Encode(),
 		strings.NewReader(sql),
 		http.Header{
-			handlers.DatasourceHeader: []string{clusterName},
+			handlers.DatasourceHeader: []string{datasource},
 			"Content-Type":            []string{"text/plain"},
 		},
 	)

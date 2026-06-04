@@ -29,7 +29,9 @@ type Example struct {
 	Name        string `json:"name" yaml:"name"`
 	Description string `json:"description" yaml:"description"`
 	Query       string `json:"query" yaml:"query"`
-	Cluster     string `json:"cluster" yaml:"cluster"`
+	// Target identifies the datasource the example runs against: a ClickHouse
+	// cluster name, or a Prometheus/Loki datasource name.
+	Target string `json:"target" yaml:"target"`
 }
 
 // ModuleDoc describes a module in the Python library.

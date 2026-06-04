@@ -474,13 +474,7 @@ func (a *App) discoveredDatasources(proxyClient proxy.Client) []types.Datasource
 	discovered = append(discovered, proxyClient.ClickHouseDatasourceInfo()...)
 	discovered = append(discovered, proxyClient.PrometheusDatasourceInfo()...)
 	discovered = append(discovered, proxyClient.LokiDatasourceInfo()...)
-
-	if proxyClient.EthNodeAvailable() {
-		discovered = append(discovered, types.DatasourceInfo{
-			Type: "ethnode",
-			Name: "ethnode",
-		})
-	}
+	discovered = append(discovered, proxyClient.EthNodeDatasourceInfo()...)
 
 	return discovered
 }

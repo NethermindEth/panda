@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -76,8 +75,8 @@ func TestRouterMergesDatasourcesFirstWinsAndWarnsOnCollision(t *testing.T) {
 	if !ok {
 		t.Fatalf("ClientForDatasource(clickhouse, local-kurtosis) not found")
 	}
-	if got := client.RegisterToken("query"); got != "local-token:query" {
-		t.Fatalf("local-kurtosis owner token = %q, want local-token:query", got)
+	if got := client.RegisterToken(); got != "local-token" {
+		t.Fatalf("local-kurtosis owner token = %q, want local-token", got)
 	}
 
 	logOutput := logBuf.String()
@@ -121,7 +120,7 @@ func TestRouterPrimaryIsFirstExternalProxy(t *testing.T) {
 	if got := router.URL(); got != "https://hosted.example" {
 		t.Fatalf("URL() = %q, want hosted URL", got)
 	}
-	if got := router.RegisterToken("embedding"); got != "hosted-token:embedding" {
+	if got := router.RegisterToken(); got != "hosted-token" {
 		t.Fatalf("RegisterToken() = %q, want hosted token", got)
 	}
 	if !router.EmbeddingAvailable() {
@@ -159,7 +158,7 @@ func TestRouterWithOnlyLocalProxyHasNoPrimary(t *testing.T) {
 	if got := router.URL(); got != "" {
 		t.Fatalf("URL() = %q, want empty", got)
 	}
-	if got := router.RegisterToken("embedding"); got != "" {
+	if got := router.RegisterToken(); got != "" {
 		t.Fatalf("RegisterToken() = %q, want empty", got)
 	}
 	if router.EmbeddingAvailable() {
@@ -284,15 +283,9 @@ func (f *fakeRouterClient) Stop(_ context.Context) error {
 
 func (f *fakeRouterClient) URL() string { return f.url }
 
-func (f *fakeRouterClient) RegisterToken(executionID string) string {
-	if f.token == "" {
-		return ""
-	}
+func (f *fakeRouterClient) RegisterToken() string { return f.token }
 
-	return fmt.Sprintf("%s:%s", f.token, executionID)
-}
-
-func (f *fakeRouterClient) RevokeToken(_ string) {}
+func (f *fakeRouterClient) RevokeToken() {}
 
 func (f *fakeRouterClient) ClickHouseDatasources() []string {
 	return namesFromInfo(f.ClickHouseDatasourceInfo())
@@ -319,6 +312,10 @@ func (f *fakeRouterClient) LokiDatasourceInfo() []types.DatasourceInfo {
 }
 
 func (f *fakeRouterClient) EthNodeAvailable() bool { return f.ethnode }
+
+func (f *fakeRouterClient) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	return ethNodeDatasourceInfo(f.ethnode)
+}
 
 func (f *fakeRouterClient) EmbeddingAvailable() bool { return f.embedding }
 

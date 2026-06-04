@@ -31,10 +31,12 @@ func TestBlockArchiveLive_ListNetworks(t *testing.T) {
 		Kind string `json:"kind"`
 		Data struct {
 			Networks []struct {
-				Name    string `json:"name"`
-				Status  string `json:"status"`
-				Source  string `json:"source"`
-				Polling bool   `json:"polling"`
+				Name  string `json:"name"`
+				Extra struct {
+					Status  string `json:"status"`
+					Source  string `json:"source"`
+					Polling bool   `json:"polling"`
+				} `json:"extra"`
 			} `json:"networks"`
 		} `json:"data"`
 	}
@@ -50,7 +52,7 @@ func TestBlockArchiveLive_ListNetworks(t *testing.T) {
 	names := make(map[string]bool, len(payload.Data.Networks))
 	for _, n := range payload.Data.Networks {
 		names[n.Name] = true
-		if !n.Polling {
+		if !n.Extra.Polling {
 			t.Errorf("active=true should only return polling networks, got %+v", n)
 		}
 	}
@@ -71,8 +73,10 @@ func TestBlockArchiveLive_ListNetworks_All(t *testing.T) {
 	var payload struct {
 		Data struct {
 			Networks []struct {
-				Name   string `json:"name"`
-				Source string `json:"source"`
+				Name  string `json:"name"`
+				Extra struct {
+					Source string `json:"source"`
+				} `json:"extra"`
 			} `json:"networks"`
 		} `json:"data"`
 	}
@@ -88,10 +92,10 @@ func TestBlockArchiveLive_ListNetworks_All(t *testing.T) {
 	hasStatic := false
 	hasCartographoor := false
 	for _, n := range payload.Data.Networks {
-		if n.Source == "static" {
+		if n.Extra.Source == "static" {
 			hasStatic = true
 		}
-		if n.Source == "cartographoor" {
+		if n.Extra.Source == "cartographoor" {
 			hasCartographoor = true
 		}
 	}

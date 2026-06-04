@@ -31,9 +31,9 @@ def query(
 def query_range(
     instance_name: str,
     promql: str,
-    start: str,
-    end: str,
     step: str,
+    start: str | None = None,
+    end: str | None = None,
 ) -> dict[str, Any]:
     return _runtime.invoke_json_data(
         "prometheus.query_range",
@@ -47,17 +47,35 @@ def query_range(
     )
 
 
-def get_labels(instance_name: str) -> list[str]:
+def get_labels(
+    instance_name: str,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[str]:
     data = _runtime.invoke_json_data(
         "prometheus.get_labels",
-        {"datasource": instance_name},
+        {
+            "datasource": instance_name,
+            "start": start,
+            "end": end,
+        },
     )
     return data if isinstance(data, list) else []
 
 
-def get_label_values(instance_name: str, label: str) -> list[str]:
+def get_label_values(
+    instance_name: str,
+    label: str,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[str]:
     data = _runtime.invoke_json_data(
         "prometheus.get_label_values",
-        {"datasource": instance_name, "label": label},
+        {
+            "datasource": instance_name,
+            "label": label,
+            "start": start,
+            "end": end,
+        },
     )
     return data if isinstance(data, list) else []

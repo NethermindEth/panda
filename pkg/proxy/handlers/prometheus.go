@@ -1,16 +1,11 @@
 package handlers
 
 import (
-	"fmt"
-	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 )
-
-// Note: DatasourceHeader is defined in clickhouse.go
 
 // PrometheusConfig holds Prometheus proxy configuration for a single datasource.
 type PrometheusConfig struct {
@@ -23,21 +18,15 @@ type PrometheusConfig struct {
 }
 
 // PrometheusHandler handles requests to Prometheus datasources.
+// The datasource is specified via the X-Datasource header.
 type PrometheusHandler struct {
-	log         logrus.FieldLogger
-	datasources map[string]*prometheusDatasource
-}
-
-type prometheusDatasource struct {
-	cfg   PrometheusConfig
-	proxy *httputil.ReverseProxy
+	*datasourceHandler
 }
 
 // NewPrometheusHandler creates a new Prometheus handler.
 func NewPrometheusHandler(log logrus.FieldLogger, configs []PrometheusConfig) *PrometheusHandler {
 	h := &PrometheusHandler{
-		log:         log.WithField("handler", "prometheus"),
-		datasources: make(map[string]*prometheusDatasource, len(configs)),
+		datasourceHandler: newDatasourceHandler(log, "prometheus", "/prometheus"),
 	}
 
 	for _, cfg := range configs {
@@ -47,7 +36,7 @@ func NewPrometheusHandler(log logrus.FieldLogger, configs []PrometheusConfig) *P
 	return h
 }
 
-func (h *PrometheusHandler) createDatasource(cfg PrometheusConfig) *prometheusDatasource {
+func (h *PrometheusHandler) createDatasource(cfg PrometheusConfig) *datasourceProxy {
 	targetURL, err := url.Parse(cfg.URL)
 	if err != nil {
 		h.log.WithError(err).WithField("datasource", cfg.Name).Error("Failed to parse URL")
@@ -55,7 +44,6 @@ func (h *PrometheusHandler) createDatasource(cfg PrometheusConfig) *prometheusDa
 		return nil
 	}
 
-	// Create reverse proxy.
 	rp := &httputil.ReverseProxy{Transport: newProxyTransport(false)}
 
 	rp.Rewrite = func(pr *httputil.ProxyRequest) {
@@ -78,54 +66,7 @@ func (h *PrometheusHandler) createDatasource(cfg PrometheusConfig) *prometheusDa
 		pr.Out.Header.Del("Host")
 	}
 
-	// Error handler.
-	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		h.log.WithError(err).WithField("datasource", cfg.Name).Error("Proxy error")
-		http.Error(w, fmt.Sprintf("proxy error: %v", err), http.StatusBadGateway)
-	}
+	rp.ErrorHandler = h.proxyErrorHandler(cfg.Name)
 
-	return &prometheusDatasource{
-		cfg:   cfg,
-		proxy: rp,
-	}
-}
-
-// ServeHTTP handles Prometheus requests. The datasource is specified via X-Datasource header.
-func (h *PrometheusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Extract datasource name from header.
-	datasourceName := r.Header.Get(DatasourceHeader)
-	if datasourceName == "" {
-		http.Error(w, fmt.Sprintf("missing %s header", DatasourceHeader), http.StatusBadRequest)
-
-		return
-	}
-
-	datasource, ok := h.datasources[datasourceRoute(r, datasourceName)]
-	if !ok {
-		http.Error(w, fmt.Sprintf("unknown datasource: %s", datasourceName), http.StatusNotFound)
-
-		return
-	}
-
-	if datasource == nil {
-		http.Error(w, fmt.Sprintf("datasource %s not properly configured", datasourceName), http.StatusInternalServerError)
-
-		return
-	}
-
-	// Strip /prometheus prefix from path, keep the rest for the upstream.
-	path := strings.TrimPrefix(r.URL.Path, "/prometheus")
-	if path == "" {
-		path = "/"
-	}
-
-	r.URL.Path = path
-
-	h.log.WithFields(logrus.Fields{
-		"datasource": datasourceName,
-		"path":       path,
-		"method":     r.Method,
-	}).Debug("Proxying Prometheus request")
-
-	datasource.proxy.ServeHTTP(w, r)
+	return &datasourceProxy{proxy: rp}
 }

@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	simpleauth "github.com/ethpandaops/panda/pkg/auth"
+	"github.com/ethpandaops/panda/pkg/auth"
 )
 
 // AuthMode determines how the proxy authenticates requests.
@@ -45,7 +45,7 @@ type noneAuthenticator struct {
 // Compile-time interface checks.
 var (
 	_ Authenticator = (*noneAuthenticator)(nil)
-	_ Authenticator = (*simpleServiceAuthenticator)(nil)
+	_ Authenticator = (*authServerAuthenticator)(nil)
 )
 
 // NewNoneAuthenticator creates an authenticator that allows all requests.
@@ -73,23 +73,23 @@ func (a *noneAuthenticator) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-type simpleServiceAuthenticator struct {
-	svc simpleauth.SimpleService
+type authServerAuthenticator struct {
+	svc auth.AuthorizationServer
 }
 
-func NewSimpleServiceAuthenticator(svc simpleauth.SimpleService) Authenticator {
-	return &simpleServiceAuthenticator{svc: svc}
+func NewAuthServerAuthenticator(svc auth.AuthorizationServer) Authenticator {
+	return &authServerAuthenticator{svc: svc}
 }
 
-func (a *simpleServiceAuthenticator) Start(ctx context.Context) error {
+func (a *authServerAuthenticator) Start(ctx context.Context) error {
 	return a.svc.Start(ctx)
 }
 
-func (a *simpleServiceAuthenticator) Stop() error {
+func (a *authServerAuthenticator) Stop() error {
 	return a.svc.Stop()
 }
 
-func (a *simpleServiceAuthenticator) Middleware() func(http.Handler) http.Handler {
+func (a *authServerAuthenticator) Middleware() func(http.Handler) http.Handler {
 	return a.svc.Middleware()
 }
 
@@ -100,7 +100,7 @@ func GetUserID(ctx context.Context) string {
 		return user.Subject
 	}
 
-	legacyUser := simpleauth.GetAuthUser(ctx)
+	legacyUser := auth.GetAuthUser(ctx)
 	if legacyUser == nil || legacyUser.Subject == "" {
 		return ""
 	}

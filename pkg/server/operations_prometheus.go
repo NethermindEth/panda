@@ -29,12 +29,13 @@ func (s *service) handlePrometheusOperation(operationID string, w http.ResponseW
 }
 
 func (s *service) handlePrometheusListDatasources(w http.ResponseWriter) {
-	items := make([]map[string]any, 0)
+	items := make([]listItem, 0)
 	for _, info := range s.proxyService.PrometheusDatasourceInfo() {
-		items = append(items, map[string]any{
-			"name":        info.Name,
-			"description": info.Description,
-			"url":         info.Metadata["url"],
+		items = append(items, listItem{
+			Name:        info.Name,
+			Description: info.Description,
+			URL:         info.Metadata["url"],
+			Type:        info.Type,
 		})
 	}
 
@@ -68,13 +69,23 @@ func (s *service) handlePrometheusQuery(w http.ResponseWriter, r *http.Request, 
 	path := "/prometheus/api/v1/query"
 
 	if rangeQuery {
-		start, err := parsePrometheusTime(optionalStringArg(req.Args, "start"), now)
+		startValue := optionalStringArg(req.Args, "start")
+		if startValue == "" {
+			startValue = "now-1h"
+		}
+
+		start, err := parsePrometheusTime(startValue, now)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		end, err := parsePrometheusTime(optionalStringArg(req.Args, "end"), now)
+		endValue := optionalStringArg(req.Args, "end")
+		if endValue == "" {
+			endValue = "now"
+		}
+
+		end, err := parsePrometheusTime(endValue, now)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
@@ -122,7 +133,13 @@ func (s *service) handlePrometheusLabels(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.proxyPassthroughGet(w, r, "prometheus", "/prometheus/api/v1/labels", nil, datasource)
+	params, err := buildPrometheusLabelParams(req.Args)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	s.proxyPassthroughGet(w, r, "prometheus", "/prometheus/api/v1/labels", params, datasource)
 }
 
 func (s *service) handlePrometheusLabelValues(w http.ResponseWriter, r *http.Request) {
@@ -144,5 +161,34 @@ func (s *service) handlePrometheusLabelValues(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	s.proxyPassthroughGet(w, r, "prometheus", "/prometheus/api/v1/label/"+url.PathEscape(label)+"/values", nil, datasource)
+	params, err := buildPrometheusLabelParams(req.Args)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	s.proxyPassthroughGet(w, r, "prometheus", "/prometheus/api/v1/label/"+url.PathEscape(label)+"/values", params, datasource)
+}
+
+func buildPrometheusLabelParams(args map[string]any) (url.Values, error) {
+	params := url.Values{}
+	now := time.Now().UTC()
+
+	if start := optionalStringArg(args, "start"); start != "" {
+		parsedStart, err := parsePrometheusTime(start, now)
+		if err != nil {
+			return nil, err
+		}
+		params.Set("start", parsedStart)
+	}
+
+	if end := optionalStringArg(args, "end"); end != "" {
+		parsedEnd, err := parsePrometheusTime(end, now)
+		if err != nil {
+			return nil, err
+		}
+		params.Set("end", parsedEnd)
+	}
+
+	return params, nil
 }

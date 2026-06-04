@@ -1,16 +1,11 @@
 package handlers
 
 import (
-	"fmt"
-	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 )
-
-// Note: DatasourceHeader is defined in clickhouse.go
 
 // LokiConfig holds Loki proxy configuration for a single datasource.
 type LokiConfig struct {
@@ -23,21 +18,15 @@ type LokiConfig struct {
 }
 
 // LokiHandler handles requests to Loki datasources.
+// The datasource is specified via the X-Datasource header.
 type LokiHandler struct {
-	log         logrus.FieldLogger
-	datasources map[string]*lokiDatasource
-}
-
-type lokiDatasource struct {
-	cfg   LokiConfig
-	proxy *httputil.ReverseProxy
+	*datasourceHandler
 }
 
 // NewLokiHandler creates a new Loki handler.
 func NewLokiHandler(log logrus.FieldLogger, configs []LokiConfig) *LokiHandler {
 	h := &LokiHandler{
-		log:         log.WithField("handler", "loki"),
-		datasources: make(map[string]*lokiDatasource, len(configs)),
+		datasourceHandler: newDatasourceHandler(log, "loki", "/loki"),
 	}
 
 	for _, cfg := range configs {
@@ -47,7 +36,7 @@ func NewLokiHandler(log logrus.FieldLogger, configs []LokiConfig) *LokiHandler {
 	return h
 }
 
-func (h *LokiHandler) createDatasource(cfg LokiConfig) *lokiDatasource {
+func (h *LokiHandler) createDatasource(cfg LokiConfig) *datasourceProxy {
 	targetURL, err := url.Parse(cfg.URL)
 	if err != nil {
 		h.log.WithError(err).WithField("datasource", cfg.Name).Error("Failed to parse URL")
@@ -55,7 +44,6 @@ func (h *LokiHandler) createDatasource(cfg LokiConfig) *lokiDatasource {
 		return nil
 	}
 
-	// Create reverse proxy.
 	rp := &httputil.ReverseProxy{Transport: newProxyTransport(false)}
 
 	rp.Rewrite = func(pr *httputil.ProxyRequest) {
@@ -78,54 +66,7 @@ func (h *LokiHandler) createDatasource(cfg LokiConfig) *lokiDatasource {
 		pr.Out.Header.Del("Host")
 	}
 
-	// Error handler.
-	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		h.log.WithError(err).WithField("datasource", cfg.Name).Error("Proxy error")
-		http.Error(w, fmt.Sprintf("proxy error: %v", err), http.StatusBadGateway)
-	}
+	rp.ErrorHandler = h.proxyErrorHandler(cfg.Name)
 
-	return &lokiDatasource{
-		cfg:   cfg,
-		proxy: rp,
-	}
-}
-
-// ServeHTTP handles Loki requests. The datasource is specified via X-Datasource header.
-func (h *LokiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Extract datasource name from header.
-	datasourceName := r.Header.Get(DatasourceHeader)
-	if datasourceName == "" {
-		http.Error(w, fmt.Sprintf("missing %s header", DatasourceHeader), http.StatusBadRequest)
-
-		return
-	}
-
-	datasource, ok := h.datasources[datasourceRoute(r, datasourceName)]
-	if !ok {
-		http.Error(w, fmt.Sprintf("unknown datasource: %s", datasourceName), http.StatusNotFound)
-
-		return
-	}
-
-	if datasource == nil {
-		http.Error(w, fmt.Sprintf("datasource %s not properly configured", datasourceName), http.StatusInternalServerError)
-
-		return
-	}
-
-	// Strip /loki prefix from path, keep the rest for the upstream.
-	path := strings.TrimPrefix(r.URL.Path, "/loki")
-	if path == "" {
-		path = "/"
-	}
-
-	r.URL.Path = path
-
-	h.log.WithFields(logrus.Fields{
-		"datasource": datasourceName,
-		"path":       path,
-		"method":     r.Method,
-	}).Debug("Proxying Loki request")
-
-	datasource.proxy.ServeHTTP(w, r)
+	return &datasourceProxy{proxy: rp}
 }

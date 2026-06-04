@@ -161,23 +161,23 @@ func (r *routerClient) URL() string {
 }
 
 // RegisterToken returns a primary-proxy token for primary-only proxy requests.
-func (r *routerClient) RegisterToken(executionID string) string {
+func (r *routerClient) RegisterToken() string {
 	primary := r.Primary()
 	if primary == nil {
 		return ""
 	}
 
-	return primary.RegisterToken(executionID)
+	return primary.RegisterToken()
 }
 
 // RevokeToken revokes a primary-proxy token for primary-only proxy requests.
-func (r *routerClient) RevokeToken(executionID string) {
+func (r *routerClient) RevokeToken() {
 	primary := r.Primary()
 	if primary == nil {
 		return
 	}
 
-	primary.RevokeToken(executionID)
+	primary.RevokeToken()
 }
 
 // EnsureAuthenticated checks authentication for the primary external proxy.
@@ -243,6 +243,16 @@ func (r *routerClient) EthNodeAvailable() bool {
 	}
 
 	return primary.EthNodeAvailable()
+}
+
+// EthNodeDatasourceInfo returns primary-proxy ethnode datasource info.
+func (r *routerClient) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	primary := r.Primary()
+	if primary == nil {
+		return nil
+	}
+
+	return primary.EthNodeDatasourceInfo()
 }
 
 // EmbeddingAvailable returns primary-proxy embedding availability.

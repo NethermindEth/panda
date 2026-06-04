@@ -14,7 +14,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	simpleauth "github.com/ethpandaops/panda/pkg/auth"
+	"github.com/ethpandaops/panda/pkg/auth"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 )
 
@@ -510,8 +510,8 @@ func TestBrandingEndpointReturnsConfigWhenSet(t *testing.T) {
 	cfg := ServerConfig{
 		Auth: AuthConfig{
 			Mode: AuthModeNone,
-			SuccessPage: &simpleauth.SuccessPageConfig{
-				Default: &simpleauth.SuccessPageDisplay{
+			SuccessPage: &auth.SuccessPageConfig{
+				Default: &auth.SuccessPageDisplay{
 					Tagline: "Welcome to panda!",
 				},
 			},
@@ -535,7 +535,7 @@ func TestBrandingEndpointReturnsConfigWhenSet(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	var got simpleauth.SuccessPageConfig
+	var got auth.SuccessPageConfig
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}

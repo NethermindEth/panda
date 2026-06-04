@@ -221,24 +221,24 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 			Functions: map[string]types.FunctionDoc{
 				"list_datasources": {
 					Signature:   "clickhouse.list_datasources() -> list[dict]",
-					Description: "List available ClickHouse clusters. Prefer datasources://clickhouse resource instead.",
-					Returns:     "List of dicts with 'name', 'description', 'database' keys",
+					Description: "List available ClickHouse datasources. Prefer datasources://clickhouse resource instead.",
+					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys ('extra.database' holds the default database)",
 				},
 				"query": {
-					Signature:   "clickhouse.query(cluster_name: str, sql: str) -> pandas.DataFrame",
+					Signature:   "clickhouse.query(datasource: str, sql: str) -> pandas.DataFrame",
 					Description: "Execute SQL query, return DataFrame",
 					Parameters: map[string]string{
-						"cluster_name": "'clickhouse-raw' or 'clickhouse-refined' - see panda://getting-started for syntax differences",
-						"sql":          "SQL query string",
+						"datasource": "'clickhouse-raw' or 'clickhouse-refined' - see panda://getting-started for syntax differences",
+						"sql":        "SQL query string",
 					},
 					Returns: "pandas.DataFrame",
 				},
 				"query_raw": {
-					Signature:   "clickhouse.query_raw(cluster_name: str, sql: str) -> tuple[list[tuple], list[str]]",
+					Signature:   "clickhouse.query_raw(datasource: str, sql: str) -> tuple[list[tuple], list[str]]",
 					Description: "Execute SQL query, return raw tuples",
 					Parameters: map[string]string{
-						"cluster_name": "'clickhouse-raw' or 'clickhouse-refined'",
-						"sql":          "SQL query string",
+						"datasource": "'clickhouse-raw' or 'clickhouse-refined'",
+						"sql":        "SQL query string",
 					},
 					Returns: "(rows, column_names)",
 				},

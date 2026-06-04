@@ -83,7 +83,7 @@ func Build(
 	embedder := embedding.NewRemote(
 		log,
 		proxyService.URL(),
-		func() string { return proxyService.RegisterToken("embedding") },
+		func() string { return proxyService.RegisterToken() },
 		localCache,
 		model,
 	)

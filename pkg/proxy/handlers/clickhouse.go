@@ -1,4 +1,3 @@
-// Package handlers provides reverse proxy handlers for each datasource type.
 package handlers
 
 import (
@@ -14,26 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// DatasourceHeader is the HTTP header used to specify which datasource to route to.
-const DatasourceHeader = "X-Datasource"
-
-type datasourceRouteContextKey struct{}
-
-// WithDatasourceRoute stores the selected backend route for the current request.
-func WithDatasourceRoute(ctx context.Context, routeName string) context.Context {
-	return context.WithValue(ctx, datasourceRouteContextKey{}, routeName)
-}
-
-func datasourceRoute(r *http.Request, fallback string) string {
-	routeName, _ := r.Context().Value(datasourceRouteContextKey{}).(string)
-	if routeName == "" {
-		return fallback
-	}
-
-	return routeName
-}
-
-// ClickHouseConfig holds ClickHouse proxy configuration for a single cluster.
+// ClickHouseConfig holds ClickHouse proxy configuration for a single datasource.
 type ClickHouseConfig struct {
 	Name        string
 	RouteName   string
@@ -48,9 +28,9 @@ type ClickHouseConfig struct {
 	Timeout     int
 }
 
-// ClickHouseHandler handles requests to ClickHouse clusters. Clusters may be
-// added or removed at runtime (e.g. by autodiscovery), so all access to the
-// cluster map and name list is guarded by mu.
+// ClickHouseHandler handles requests to ClickHouse datasources. Datasources may
+// be added or removed at runtime (e.g. by autodiscovery), so all access to the
+// datasource map and name list is guarded by mu.
 type ClickHouseHandler struct {
 	log logrus.FieldLogger
 
@@ -80,7 +60,6 @@ func NewClickHouseHandler(log logrus.FieldLogger, configs []ClickHouseConfig) *C
 }
 
 func (h *ClickHouseHandler) createCluster(cfg ClickHouseConfig) *clickhouseCluster {
-	// Build target URL.
 	scheme := "https"
 	if !cfg.Secure {
 		scheme = "http"
@@ -91,7 +70,6 @@ func (h *ClickHouseHandler) createCluster(cfg ClickHouseConfig) *clickhouseClust
 		Host:   fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 	}
 
-	// Create reverse proxy.
 	rp := &httputil.ReverseProxy{Transport: newProxyTransport(cfg.SkipVerify)}
 
 	rp.Rewrite = func(pr *httputil.ProxyRequest) {
@@ -123,10 +101,9 @@ func (h *ClickHouseHandler) createCluster(cfg ClickHouseConfig) *clickhouseClust
 		pr.Out.Header.Del("Host")
 	}
 
-	// Error handler.
 	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		h.log.WithError(err).WithField("cluster", cfg.Name).Error("Proxy error")
-		http.Error(w, fmt.Sprintf("proxy error: %v", err), http.StatusBadGateway)
+		h.log.WithError(err).WithField("datasource", cfg.Name).Error("Proxy error")
+		writeError(w, http.StatusBadGateway, "proxy error: %v", err)
 	}
 
 	return &clickhouseCluster{
@@ -135,22 +112,21 @@ func (h *ClickHouseHandler) createCluster(cfg ClickHouseConfig) *clickhouseClust
 	}
 }
 
-// ServeHTTP handles ClickHouse requests. The cluster is specified via X-Datasource header.
+// ServeHTTP handles ClickHouse requests. The datasource is specified via X-Datasource header.
 func (h *ClickHouseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Extract cluster name from header.
-	clusterName := r.Header.Get(DatasourceHeader)
-	if clusterName == "" {
-		http.Error(w, fmt.Sprintf("missing %s header", DatasourceHeader), http.StatusBadRequest)
+	datasourceName := r.Header.Get(DatasourceHeader)
+	if datasourceName == "" {
+		writeError(w, http.StatusBadRequest, "missing %s header", DatasourceHeader)
 
 		return
 	}
 
 	h.mu.RLock()
-	cluster, ok := h.clusters[datasourceRoute(r, clusterName)]
+	cluster, ok := h.clusters[datasourceRoute(r, datasourceName)]
 	h.mu.RUnlock()
 
 	if !ok {
-		http.Error(w, fmt.Sprintf("unknown cluster: %s", clusterName), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "unknown datasource: %s", datasourceName)
 
 		return
 	}
@@ -171,15 +147,15 @@ func (h *ClickHouseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.WithFields(logrus.Fields{
-		"cluster": clusterName,
-		"path":    path,
-		"method":  r.Method,
+		"datasource": datasourceName,
+		"path":       path,
+		"method":     r.Method,
 	}).Debug("Proxying ClickHouse request")
 
 	cluster.proxy.ServeHTTP(w, r)
 }
 
-// Clusters returns the list of configured cluster names.
+// Clusters returns the list of configured ClickHouse datasource names.
 func (h *ClickHouseHandler) Clusters() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -187,7 +163,7 @@ func (h *ClickHouseHandler) Clusters() []string {
 	return append([]string(nil), h.names...)
 }
 
-// ClusterConfig returns the current configuration for a cluster name.
+// ClusterConfig returns the current configuration for a datasource name.
 func (h *ClickHouseHandler) ClusterConfig(name string) (ClickHouseConfig, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -205,7 +181,7 @@ func (h *ClickHouseHandler) ClusterConfig(name string) (ClickHouseConfig, bool) 
 	return ClickHouseConfig{}, false
 }
 
-// AddCluster adds or replaces a ClickHouse cluster at runtime.
+// AddCluster adds or replaces a ClickHouse datasource at runtime.
 func (h *ClickHouseHandler) AddCluster(cfg ClickHouseConfig) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -214,7 +190,7 @@ func (h *ClickHouseHandler) AddCluster(cfg ClickHouseConfig) {
 	h.clusters[handlerRouteName(cfg.Name, cfg.RouteName)] = h.createCluster(cfg)
 }
 
-// RemoveCluster removes a ClickHouse cluster at runtime.
+// RemoveCluster removes a ClickHouse datasource at runtime.
 func (h *ClickHouseHandler) RemoveCluster(name string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -228,7 +204,7 @@ func (h *ClickHouseHandler) RemoveCluster(name string) {
 	h.names = removeName(h.names, name)
 }
 
-// HasCluster reports whether a cluster is currently configured.
+// HasCluster reports whether a datasource is currently configured.
 func (h *ClickHouseHandler) HasCluster(name string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -244,14 +220,6 @@ func (h *ClickHouseHandler) HasCluster(name string) bool {
 	}
 
 	return false
-}
-
-func handlerRouteName(name, routeName string) string {
-	if routeName != "" {
-		return routeName
-	}
-
-	return name
 }
 
 func appendUniqueName(names []string, name string) []string {

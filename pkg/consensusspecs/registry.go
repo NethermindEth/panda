@@ -2,7 +2,6 @@ package consensusspecs
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/ethpandaops/panda/internal/githubapi"
 	"github.com/ethpandaops/panda/pkg/config"
 	"github.com/ethpandaops/panda/pkg/types"
 )
@@ -255,26 +255,11 @@ func cachePath(cacheDir string) string {
 }
 
 func readCache(cacheDir string) (*cacheData, error) {
-	data, err := os.ReadFile(cachePath(cacheDir))
-	if err != nil {
-		return nil, err
-	}
-
-	var cache cacheData
-	if err := json.Unmarshal(data, &cache); err != nil {
-		return nil, fmt.Errorf("decoding cache: %w", err)
-	}
-
-	return &cache, nil
+	return githubapi.ReadCache[cacheData](cachePath(cacheDir))
 }
 
 func writeCache(cacheDir string, cache *cacheData) error {
-	data, err := json.Marshal(cache)
-	if err != nil {
-		return fmt.Errorf("encoding cache: %w", err)
-	}
-
-	return os.WriteFile(cachePath(cacheDir), data, 0o644)
+	return githubapi.WriteCache(cachePath(cacheDir), cache)
 }
 
 // sortSpecs sorts specs by fork then topic.

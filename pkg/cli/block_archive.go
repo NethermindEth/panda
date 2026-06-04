@@ -40,32 +40,7 @@ var blockArchiveNetworksCmd = &cobra.Command{
 			return err
 		}
 
-		if isJSON() {
-			return printJSON(response)
-		}
-
-		data, _ := response.Data.(map[string]any)
-		items, _ := data["networks"].([]any)
-		if len(items) == 0 {
-			fmt.Println("No networks reported by the block archive.")
-			return nil
-		}
-
-		fmt.Printf("%-28s  %-9s  %-13s  %-7s  %s\n", "NAME", "STATUS", "SOURCE", "POLLING", "TRACOOR")
-		for _, item := range items {
-			n, _ := item.(map[string]any)
-			if n == nil {
-				continue
-			}
-			name, _ := n["name"].(string)
-			status, _ := n["status"].(string)
-			source, _ := n["source"].(string)
-			polling, _ := n["polling"].(bool)
-			tracoor, _ := n["tracoor_url"].(string)
-			fmt.Printf("%-28s  %-9s  %-13s  %-7v  %s\n", name, status, source, polling, tracoor)
-		}
-
-		return nil
+		return printListing(response, "networks", "No networks reported by the block archive.")
 	},
 }
 

@@ -80,6 +80,7 @@ panda -> local server -> local proxy -> upstreams
 
 - intended for trusted local operation
 - no hosted auth requirement
+- the sandbox-to-`proxy` isolation is a convention here, not a network boundary: in the default `docker compose` stack the sandbox shares a network with the proxy and proxy auth defaults to `none`. Sandbox code is expected to reach `server` only; if the local proxy holds privileged or shared credentials, enforce the boundary with a sandbox-only network or proxy auth.
 
 ### 2. Local server + hosted proxy
 
@@ -92,6 +93,7 @@ panda -> local server -> hosted proxy -> upstreams
 - code still executes on the user's machine
 - hosted proxy keeps credentials remote
 - `panda auth login` bootstraps access to the hosted proxy
+- the sandbox cannot reach the hosted proxy (remote and authenticated), so the sandbox-to-`proxy` boundary is enforced by topology in this mode
 
 There is no supported hosted-server product topology in this repo.
 

@@ -1,7 +1,8 @@
 // Package githubapi provides shared helpers for authenticated GitHub API
-// requests. Both the EIP and consensus-specs fetchers use these helpers
-// to build requests with optional bearer-token auth from GITHUB_TOKEN or
-// GH_TOKEN environment variables.
+// requests and on-disk JSON caching. Both the EIP and consensus-specs
+// fetchers use these helpers to build requests with optional bearer-token
+// auth from GITHUB_TOKEN or GH_TOKEN environment variables, and to read and
+// write their cache files.
 package githubapi
 
 import (

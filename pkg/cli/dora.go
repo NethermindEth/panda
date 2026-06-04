@@ -47,25 +47,7 @@ var doraNetworksCmd = &cobra.Command{
 			return err
 		}
 
-		if isJSON() {
-			return printJSON(response)
-		}
-
-		data, _ := response.Data.(map[string]any)
-		items, _ := data["networks"].([]any)
-		if len(items) == 0 {
-			fmt.Println("No networks with Dora explorers found.")
-			return nil
-		}
-
-		for _, item := range items {
-			network, _ := item.(map[string]any)
-			name, _ := network["name"].(string)
-			doraURL, _ := network["dora_url"].(string)
-			fmt.Printf("  %-30s  %s\n", name, doraURL)
-		}
-
-		return nil
+		return printListing(response, "networks", "No networks with Dora explorers found.")
 	},
 }
 

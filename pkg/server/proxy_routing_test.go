@@ -42,7 +42,7 @@ func TestClickHouseQueryRoutesToDatasourceOwnerProxy(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operations/clickhouse.query", strings.NewReader(`{
 		"args": {
-			"cluster": "local-kurtosis",
+			"datasource": "local-kurtosis",
 			"sql": "SELECT 1"
 		}
 	}`))
@@ -246,8 +246,8 @@ type routingProxyClient struct {
 func (c *routingProxyClient) Start(_ context.Context) error { return nil }
 func (c *routingProxyClient) Stop(_ context.Context) error  { return nil }
 func (c *routingProxyClient) URL() string                   { return c.url }
-func (c *routingProxyClient) RegisterToken(_ string) string { return c.token }
-func (c *routingProxyClient) RevokeToken(_ string)          {}
+func (c *routingProxyClient) RegisterToken() string         { return c.token }
+func (c *routingProxyClient) RevokeToken()                  {}
 func (c *routingProxyClient) ClickHouseDatasources() []string {
 	return datasourceNames(c.ClickHouseDatasourceInfo())
 }
@@ -266,7 +266,10 @@ func (c *routingProxyClient) LokiDatasources() []string {
 func (c *routingProxyClient) LokiDatasourceInfo() []types.DatasourceInfo {
 	return append([]types.DatasourceInfo(nil), c.loki...)
 }
-func (c *routingProxyClient) EthNodeAvailable() bool           { return false }
+func (c *routingProxyClient) EthNodeAvailable() bool { return false }
+func (c *routingProxyClient) EthNodeDatasourceInfo() []types.DatasourceInfo {
+	return nil
+}
 func (c *routingProxyClient) EmbeddingAvailable() bool         { return false }
 func (c *routingProxyClient) EmbeddingModel() string           { return "" }
 func (c *routingProxyClient) Discover(_ context.Context) error { return nil }

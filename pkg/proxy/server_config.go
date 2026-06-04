@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	simpleauth "github.com/ethpandaops/panda/pkg/auth"
+	"github.com/ethpandaops/panda/pkg/auth"
 	"github.com/ethpandaops/panda/pkg/configpath"
 	"github.com/ethpandaops/panda/pkg/proxy/handlers"
 )
@@ -91,13 +91,13 @@ type AuthConfig struct {
 	Issuers []OIDCIssuerConfig `yaml:"issuers,omitempty"`
 
 	// GitHub configures the GitHub OAuth app used for user authentication.
-	GitHub *simpleauth.GitHubConfig `yaml:"github,omitempty"`
+	GitHub *auth.GitHubConfig `yaml:"github,omitempty"`
 
 	// AllowedOrgs restricts access to members of these GitHub orgs.
 	AllowedOrgs []string `yaml:"allowed_orgs,omitempty"`
 
 	// Tokens configures proxy-issued bearer tokens.
-	Tokens simpleauth.TokensConfig `yaml:"tokens"`
+	Tokens auth.TokensConfig `yaml:"tokens"`
 
 	// AccessTokenTTL is the lifetime of proxy-issued access tokens.
 	AccessTokenTTL time.Duration `yaml:"access_token_ttl,omitempty"`
@@ -106,7 +106,7 @@ type AuthConfig struct {
 	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl,omitempty"`
 
 	// SuccessPage customizes the OAuth callback success page shown in the browser.
-	SuccessPage *simpleauth.SuccessPageConfig `yaml:"success_page,omitempty"`
+	SuccessPage *auth.SuccessPageConfig `yaml:"success_page,omitempty"`
 }
 
 // DatasourceConfig is the interface every datasource config must satisfy.

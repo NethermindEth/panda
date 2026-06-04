@@ -4,11 +4,11 @@ prometheus_basics:
   examples:
     - name: Check service health
       description: Check if monitored services are up and running
-      cluster: prometheus
+      target: prometheus
       query: |
         up
     - name: HTTP request rate
       description: Get the rate of HTTP requests over the last 5 minutes
-      cluster: prometheus
+      target: prometheus
       query: |
         rate(http_requests_total[5m])

@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
-	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -14,7 +13,7 @@ var versionJSON bool
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version information",
-	Run:   runVersion,
+	RunE:  runVersion,
 }
 
 func init() {
@@ -22,18 +21,6 @@ func init() {
 	versionCmd.Flags().BoolVar(&versionJSON, "json", false, "Output in JSON format")
 }
 
-func runVersion(_ *cobra.Command, _ []string) {
-	info := map[string]string{
-		"version":    version.Version,
-		"git_commit": version.GitCommit,
-		"build_time": version.BuildTime,
-	}
-
-	if versionJSON {
-		data, _ := json.MarshalIndent(info, "", "  ")
-		fmt.Println(string(data))
-	} else {
-		fmt.Printf("panda-server version %s (commit: %s, built: %s)\n",
-			version.Version, version.GitCommit, version.BuildTime)
-	}
+func runVersion(_ *cobra.Command, _ []string) error {
+	return version.Fprint(os.Stdout, "panda-server", versionJSON)
 }
