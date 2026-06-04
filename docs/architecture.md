@@ -5,14 +5,15 @@ This document defines the supported architecture and responsibility boundaries f
 ## Product Boundary
 
 ```text
-panda / MCP client -> server -> proxy -> upstream datasources
-                     |
+panda / MCP client -> server -> proxy router -> proxy/proxies -> upstream datasources
+                     |                 |
+                     |                 -> embedded local proxy -> local datasources
                      -> sandbox -> server
 ```
 
 - `panda` and MCP clients are the only user or agent entry points.
 - `server` is the only product API boundary.
-- `proxy` is not a product API. It is an internal credentialed gateway.
+- `proxy` is not a product API. It is an internal credentialed gateway, and the server may route across multiple configured proxies plus an embedded local proxy.
 - sandboxed Python never talks to `proxy` directly.
 
 ## Responsibilities
@@ -34,9 +35,9 @@ If a change affects product semantics, defaults, validation, output shape, or th
 
 ### `proxy`
 
-`proxy` is intentionally thin. It owns:
+`proxy` is intentionally thin. Each proxy route owns:
 
-- datasource identity and credentials
+- datasource identity and credentials for the datasources it advertises
 - datasource discovery via `GET /datasources` (authenticated, returns metadata without credentials)
 - hosted auth control plane for remote users
 - proxy-scoped bearer token validation
@@ -126,9 +127,11 @@ Modules are server-side integrations. They do not define new MCP tools.
 
 ### Datasource Discovery
 
-Datasource identity (name, description, metadata) is owned by the proxy.
+Datasource identity (name, description, metadata) is owned by whichever proxy advertised it.
+The server builds a proxy router from every configured `proxies:` entry and, when enabled, an embedded loopback `local_proxy` route.
+Queries are routed to the proxy that owns the requested datasource.
 Modules that implement `ProxyDiscoverable` initialize from discovered datasources.
-The proxy client refreshes datasource info every 5 minutes.
+The proxy client refreshes datasource info every 60 seconds by default (the embedded local proxy polls every 5 seconds).
 
 ## Guardrails
 
@@ -136,4 +139,4 @@ The proxy client refreshes datasource info every 5 minutes.
 - do not make sandbox code talk to `proxy`
 - do not move product semantics back into `proxy`
 - do not make `panda` reconstruct server state locally
-- the proxy owns datasource identity; modules must not define their own datasource config
+- datasource identity belongs to the proxy route that advertised it; modules must not define their own datasource config

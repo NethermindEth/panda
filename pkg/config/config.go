@@ -264,6 +264,33 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// BaseUsesProxyList reports whether the base config file declares a non-empty
+// proxies list. User overrides are intentionally ignored.
+func BaseUsesProxyList(path string) (bool, error) {
+	resolvedPath, err := configpath.ResolveAppConfigPath(path)
+	if err != nil {
+		return false, err
+	}
+
+	data, err := os.ReadFile(resolvedPath)
+	if err != nil {
+		return false, fmt.Errorf("reading config file %s: %w", resolvedPath, err)
+	}
+
+	substituted, err := substituteEnvVars(string(data))
+	if err != nil {
+		return false, fmt.Errorf("substituting env vars: %w", err)
+	}
+
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(substituted), &raw); err != nil {
+		return false, fmt.Errorf("parsing config: %w", err)
+	}
+
+	proxies, ok := raw["proxies"].([]any)
+	return ok && len(proxies) > 0, nil
+}
+
 // Path returns the resolved path this config was loaded from.
 func (c *Config) Path() string {
 	return c.path

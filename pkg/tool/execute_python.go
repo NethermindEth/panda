@@ -59,7 +59,7 @@ func (c *resourceTipCache) cleanupLocked() {
 }
 
 const resourceTipMessage = `
-TIP: Read panda://getting-started for cluster rules and workflow guidance.`
+TIP: Read panda://getting-started for datasource rules and workflow guidance.`
 
 const (
 	ExecutePythonToolName = "execute_python"

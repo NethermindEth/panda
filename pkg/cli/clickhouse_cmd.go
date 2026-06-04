@@ -12,7 +12,7 @@ var clickhouseCmd = &cobra.Command{
 	GroupID: groupDirect,
 	Use:     "clickhouse",
 	Short:   "Query ClickHouse databases",
-	Long: `Execute SQL queries against ClickHouse clusters.
+	Long: `Execute SQL queries against ClickHouse datasources.
 
 Examples:
   panda clickhouse list-datasources

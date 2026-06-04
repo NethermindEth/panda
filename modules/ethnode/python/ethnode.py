@@ -16,9 +16,10 @@ def _require_ethnode_available() -> None:
 def list_datasources() -> list[dict[str, Any]]:
     """List available ethnode datasources.
 
-    Each entry has keys: name, description, url, type, extra. Ethnode is exposed
-    as a single type-level datasource rather than a discoverable instance list.
+    Entries include at least name and type. Ethnode is exposed as a type-level
+    datasource rather than a discoverable instance list.
     """
+    _require_ethnode_available()
     data = _runtime.invoke_data("ethnode.list_datasources") or {}
     datasources = data.get("datasources", [])
     return datasources if isinstance(datasources, list) else []
@@ -27,8 +28,8 @@ def list_datasources() -> list[dict[str, Any]]:
 def list_networks() -> list[dict[str, Any]]:
     """List networks reachable for direct node access.
 
-    Each entry has keys: name, description, url, type, extra. The per-node
-    instance label cannot be enumerated and must be supplied by the caller.
+    Entries include at least name and type. The per-node instance label cannot
+    be enumerated and must be supplied by the caller.
     """
     _require_ethnode_available()
     data = _runtime.invoke_data("ethnode.list_networks") or {}

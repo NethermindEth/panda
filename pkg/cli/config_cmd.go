@@ -77,7 +77,18 @@ func runConfigTUI(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("loading user overrides: %w", err)
 	}
 
-	categories := buildCategories(cfg)
+	proxyURLPath := "proxy.url"
+
+	baseUsesProxyList, err := config.BaseUsesProxyList(resolvedPath)
+	if err != nil {
+		return fmt.Errorf("detecting proxy config shape: %w", err)
+	}
+
+	if baseUsesProxyList {
+		proxyURLPath = "proxies.0.url"
+	}
+
+	categories := buildCategories(cfg, proxyURLPath)
 
 	display := newConfigDisplay(categories, resolvedPath, userPath, existingOverrides)
 	display.run()
@@ -113,7 +124,7 @@ func runConfigTUI(cmd *cobra.Command, _ []string) error {
 }
 
 // buildCategories creates the configurable parameter categories from the current config.
-func buildCategories(cfg *config.Config) []configCategory {
+func buildCategories(cfg *config.Config, proxyURLPath string) []configCategory {
 	return []configCategory{
 		{
 			Group:       "Sandbox",
@@ -224,7 +235,7 @@ func buildCategories(cfg *config.Config) []configCategory {
 				{
 					Name:        "Proxy URL",
 					Description: "URL of the credential proxy server.\n\nThis is where the server sends credentialed upstream requests.",
-					Path:        "proxy.url",
+					Path:        proxyURLPath,
 					Type:        paramString,
 					Value:       cfg.Proxy.URL,
 					Default:     "http://localhost:18081",

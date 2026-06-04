@@ -64,7 +64,7 @@ devnet_logs:
 
 production_devnet_logs:
   name: Production Devnet OTel Logs
-  description: Queries for hosted (multi-VM) devnet and testnet container logs in the clickhouse-raw cluster, table external.otel_logs. Logs are keyed by ResourceAttributes['network'] (devnet name) and ResourceAttributes['host.name'] (node, e.g. lighthouse-geth-super-1). SeverityText is usually empty for raw Docker logs, so match severity on Body. This is NOT for local Kurtosis devnets — use the local-kurtosis datasource for those.
+  description: Queries for hosted (multi-VM) devnet and testnet container logs in the clickhouse-raw datasource, table external.otel_logs. Logs are keyed by ResourceAttributes['network'] (devnet name) and ResourceAttributes['host.name'] (node, e.g. lighthouse-geth-super-1). SeverityText is usually empty for raw Docker logs, so match severity on Body. This is NOT for local Kurtosis devnets — use the local-kurtosis datasource for those.
   examples:
     - name: List devnet nodes shipping logs
       description: List the nodes (host.name) currently shipping container logs for a hosted devnet. Run this to discover the node topology before drilling into a specific node.
@@ -292,10 +292,10 @@ block_status:
 
 validators:
   name: Validator Analysis
-  description: Queries for analyzing validator counts, status distribution, and balances. Use canonical_beacon_validators on the clickhouse-raw cluster — it has one row per validator per epoch with status and balance. This single table is sufficient for validator count, status distribution, and balance queries. Do not join to dim_validator_status or fct_validator_balance for simple count/status queries.
+  description: Queries for analyzing validator counts, status distribution, and balances. Use canonical_beacon_validators on the clickhouse-raw datasource — it has one row per validator per epoch with status and balance. This single table is sufficient for validator count, status distribution, and balance queries. Do not join to dim_validator_status or fct_validator_balance for simple count/status queries.
   examples:
     - name: Active validator count for most recent finalized epoch
-      description: Get total count of active validators using canonical_beacon_validators on the clickhouse-raw cluster. Filter on status = 'active_ongoing' and the latest epoch. This single table has everything needed for validator counts.
+      description: Get total count of active validators using canonical_beacon_validators on the clickhouse-raw datasource. Filter on status = 'active_ongoing' and the latest epoch. This single table has everything needed for validator counts.
       target: clickhouse-raw
       query: |
         SELECT
@@ -306,7 +306,7 @@ validators:
           AND epoch = (SELECT max(epoch) FROM canonical_beacon_validators WHERE meta_network_name = 'mainnet')
 
     - name: Validator status distribution for most recent finalized epoch
-      description: Count validators grouped by status (active_ongoing, pending_queued, exited_slashed, etc.) using canonical_beacon_validators on the clickhouse-raw cluster. This table has one row per validator per epoch with the current status — no need to join dim_validator_status which tracks lifecycle transitions, not current state.
+      description: Count validators grouped by status (active_ongoing, pending_queued, exited_slashed, etc.) using canonical_beacon_validators on the clickhouse-raw datasource. This table has one row per validator per epoch with the current status — no need to join dim_validator_status which tracks lifecycle transitions, not current state.
       target: clickhouse-raw
       query: |
         SELECT
@@ -377,7 +377,7 @@ network_health:
   description: Queries used for monitoring Ethereum network health, derived from production alerting rules
   examples:
     - name: Attestation participation rate (raw events)
-      description: Calculate the ratio of attesting validators to total validators per slot using raw event data from clickhouse-raw cluster. For a simpler pre-aggregated approach, use fct_attestation_correctness_head on clickhouse-refined instead.
+      description: Calculate the ratio of attesting validators to total validators per slot using raw event data from clickhouse-raw. For a simpler pre-aggregated approach, use fct_attestation_correctness_head on clickhouse-refined instead.
       target: clickhouse-raw
       query: |
         WITH total_validators AS (
@@ -1026,7 +1026,7 @@ mev_analysis:
         ORDER BY hour DESC
 
     - name: MEV bid value distribution
-      description: Distribution of MEV bid values to understand the value spectrum. Uses mev_relay_bid_trace on the clickhouse-raw cluster which contains individual bid data with value (in wei).
+      description: Distribution of MEV bid values to understand the value spectrum. Uses mev_relay_bid_trace on the clickhouse-raw datasource which contains individual bid data with value (in wei).
       target: clickhouse-raw
       query: |
         SELECT
@@ -1255,7 +1255,7 @@ head_accuracy:
 
 blob_analysis:
   name: Blob Analysis
-  description: Queries for analyzing EIP-4844 blob data including blob counts, submitters, and L2 rollup activity. For blob counts and submitter identity, use dim_block_blob_submitter (clickhouse-refined). For blob content analysis (empty blobs, blob sizes), use canonical_beacon_blob_sidecar (clickhouse-raw) which has blob_size and blob_empty_size columns. Cross-cluster joins require two separate queries.
+  description: Queries for analyzing EIP-4844 blob data including blob counts, submitters, and L2 rollup activity. For blob counts and submitter identity, use dim_block_blob_submitter (clickhouse-refined). For blob content analysis (empty blobs, blob sizes), use canonical_beacon_blob_sidecar (clickhouse-raw) which has blob_size and blob_empty_size columns. Cross-datasource joins require two separate queries.
   examples:
     - name: Blob count per slot
       description: Get the number of blobs in each slot.
@@ -1383,7 +1383,7 @@ blob_analysis:
         LIMIT 50
 
     - name: Empty blob detection
-      description: Find blobs with zero useful data using canonical_beacon_blob_sidecar (clickhouse-raw cluster). The blob_empty_size column shows how many bytes are empty — when blob_empty_size equals blob_size, the blob is entirely empty. To identify submitters, join these slots to dim_block_blob_submitter on clickhouse-refined (separate query, different cluster).
+      description: Find blobs with zero useful data using canonical_beacon_blob_sidecar (clickhouse-raw datasource). The blob_empty_size column shows how many bytes are empty — when blob_empty_size equals blob_size, the blob is entirely empty. To identify submitters, join these slots to dim_block_blob_submitter on clickhouse-refined (separate query, different datasource).
       target: clickhouse-raw
       query: |
         SELECT
