@@ -24,7 +24,7 @@ def eval_settings() -> EvalSettings:
 
 @pytest.fixture
 def agent(eval_settings: EvalSettings):
-    """Create a fresh agent instance (backend selected by settings.agent_api)."""
+    """Create a fresh opencode agent instance."""
     return make_agent(eval_settings)
 
 
@@ -104,6 +104,10 @@ class TraceRecorder:
         self.settings = settings
         self.traces: list[dict[str, Any]] = []
         self.run_id = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+        # (test_id, langfuse trace deep-link) for each recorded trace, for CI to surface.
+        self.langfuse_links: list[tuple[str, str]] = []
+        # Shared Langfuse session id for this run (all traces group under it).
+        self.langfuse_session_id: str | None = None
 
     def record(
         self,
@@ -120,6 +124,7 @@ class TraceRecorder:
         error_message: str | None = None,
         langfuse: Langfuse | None = None,
         trace_id: str | None = None,
+        session_id: str | None = None,
     ) -> None:
         """Record a test trace.
 
@@ -153,6 +158,9 @@ class TraceRecorder:
             "error_message": error_message,
         })
 
+        if session_id:
+            self.langfuse_session_id = session_id
+
         # Record scores to Langfuse if enabled (using SDK v3 create_score method)
         if langfuse and trace_id:
             for metric in metrics:
@@ -162,6 +170,32 @@ class TraceRecorder:
                     value=metric["score"],
                     comment=f"passed={metric['passed']}",
                 )
+            # Collect a deep-link to this trace so CI can post it on the PR.
+            try:
+                url = langfuse.get_trace_url(trace_id=trace_id)
+                if url:
+                    self.langfuse_links.append((test_id, url))
+            except Exception:  # noqa: BLE001 - best-effort; never fail a test over a link
+                pass
+
+    def write_langfuse_links(self, path: Path) -> None:
+        """Write a single link to this run's Langfuse session (for a PR comment).
+
+        The session groups every trace from the run; we derive its URL from any
+        trace URL (same host/project, swapping /traces/<id> for /sessions/<id>).
+        """
+        if not self.langfuse_links or not self.langfuse_session_id:
+            return
+        base = self.langfuse_links[0][1].split("/traces/")[0]
+        session_url = f"{base}/sessions/{self.langfuse_session_id}"
+        n = len(self.langfuse_links)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "### 🔭 Langfuse\n\n"
+            f'<a href="{session_url}" target="_blank" rel="noopener noreferrer">'
+            f"View this run&rsquo;s session</a> "
+            f"({n} trace{'s' if n != 1 else ''})\n"
+        )
 
     def save(self) -> Path | None:
         """Save all traces to disk."""
@@ -289,6 +323,9 @@ def pytest_terminal_summary(
             terminalreporter.write_line(f"  Location: {trace_dir}")
             terminalreporter.write_line(f"  Tests: {len(_trace_recorder_instance.traces)}")
             terminalreporter.write_sep("=", "")
+
+        # Drop a markdown list of Langfuse trace links for CI to post on the PR.
+        _trace_recorder_instance.write_langfuse_links(Path("reports") / "langfuse_links.md")
 
 
 def pytest_configure(config: pytest.Config) -> None:

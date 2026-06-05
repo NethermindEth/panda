@@ -1,12 +1,17 @@
 name: Eval Smoke
 
-# Fast per-commit smoke eval: one real question (mainnet p50 block arrival, last 1d)
-# that verifies the whole pipeline end to end — the agent drives the panda CLI,
-# reaches the data, queries, and returns a plausible answer. Runs as the
-# external-scoped `panda-ci` service account against the hosted production proxy.
+# Fast smoke eval: a couple of real questions that verify the whole pipeline end to
+# end — the agent drives the panda CLI, reaches the data, queries, and returns a
+# plausible answer. Runs as the external-scoped `panda-ci` service account against
+# the hosted production proxy.
+#
+# Triggers: `pull_request` covers PR branches (checks + the results/Langfuse-trace
+# comments); `push` is master-only so we don't double-run every PR commit (a push to
+# a PR branch already fires pull_request) — the master run also populates the embedding
+# cache that PR runs restore.
 on:
   push:
-    branches: ['**']
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -177,12 +182,20 @@ jobs:
         working-directory: tests/eval
         env:
           OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
+          # LLM-as-judge (deepeval) routes the evaluator model through OpenRouter.
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          MCP_EVAL_AGENT_API: opencode
+          MCP_EVAL_EVALUATOR_MODEL: google/gemini-3.1-flash-lite
           MCP_EVAL_OPENCODE_ROUTE: cli
           MCP_EVAL_MODEL: opencode-go/deepseek-v4-flash
           MCP_EVAL_REASONING_EFFORT: high
           MCP_EVAL_OPENCODE_TIMEOUT: "120"
+          # Ship traces to the dedicated prod Langfuse (shitpit-backed). Enables when
+          # the LANGFUSE_HOST repo var + keys are set. GitHub auto-sets the GITHUB_*
+          # vars the agent turns into the trace's ci_run_url link.
+          MCP_EVAL_LANGFUSE_ENABLED: ${{ vars.LANGFUSE_HOST != '' && 'true' || 'false' }}
+          MCP_EVAL_LANGFUSE_HOST: ${{ vars.LANGFUSE_HOST }}
+          MCP_EVAL_LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          MCP_EVAL_LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
         run: |
           uv run python -m pytest tests/test_smoke.py -m smoke \
             -n 0 \
@@ -211,3 +224,12 @@ jobs:
           files: tests/eval/reports/junit.xml
           check_name: "Eval Smoke (opencode-go/deepseek-v4-flash)"
           comment_mode: ${{ github.event_name == 'pull_request' && 'always' || 'off' }}
+
+      - name: Comment Langfuse trace links
+        # The eval writes reports/langfuse_links.md (one deep-link per question) when
+        # Langfuse is enabled; surface it as a sticky PR comment.
+        if: ${{ always() && github.event_name == 'pull_request' && hashFiles('tests/eval/reports/langfuse_links.md') != '' }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: langfuse-traces
+          path: tests/eval/reports/langfuse_links.md
