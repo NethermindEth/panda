@@ -1,0 +1,213 @@
+name: Eval Smoke
+
+# Fast per-commit smoke eval: one real question (mainnet p50 block arrival, last 1d)
+# that verifies the whole pipeline end to end — the agent drives the panda CLI,
+# reaches the data, queries, and returns a plausible answer. Runs as the
+# external-scoped `panda-ci` service account against the hosted production proxy.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: eval-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write        # push/pull the content-addressed sandbox image to GHCR
+  checks: write          # publish-unit-test-result-action creates a check run
+  pull-requests: write   # ...and posts the smoke results comment on PRs
+
+env:
+  # Hosted production proxy + its Authentik issuer (dual-issuer: Dex humans + Authentik CI).
+  PANDA_PROXY_URL: ${{ vars.PANDA_PROXY_URL || 'https://panda-proxy.ethpandaops.io' }}
+  PANDA_PROXY_OIDC_ISSUER: ${{ vars.PANDA_PROXY_OIDC_ISSUER || 'https://authentik.analytics.production.platform.ethpandaops.io/application/o/panda-proxy/' }}
+  # Sandbox image is content-addressed (tag = hash of its build inputs); only built
+  # when those inputs change, and cached in GHCR. See sandbox-image-cleanup.yaml.
+  SANDBOX_IMAGE: ${{ vars.SANDBOX_IMAGE || 'ghcr.io/ethpandaops/panda-sandbox' }}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go (module + build cache)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binaries (server + panda CLI)
+        run: |
+          make build
+          echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"   # put `panda` on PATH for the CLI route
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: Install eval deps
+        working-directory: tests/eval
+        run: uv sync
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install opencode
+        run: npm install -g opencode-ai@1.15.0
+
+      - name: Configure opencode auth (opencode-go)
+        env:
+          OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path.home() / ".local/share/opencode/auth.json"
+          p.parent.mkdir(parents=True, exist_ok=True)
+          auth = json.loads(p.read_text()) if p.exists() else {}
+          auth["opencode-go"] = {"type": "api", "key": os.environ["OPENCODE_GO_API_KEY"]}
+          p.write_text(json.dumps(auth))
+          p.chmod(0o600)
+          print("configured opencode-go auth")
+          PY
+
+      - name: Log in to GHCR (sandbox image cache)
+        run: echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Sandbox image (build only if its inputs changed)
+        run: |
+          set -euo pipefail
+          HASH=$(make sandbox-hash)
+          IMG="${SANDBOX_IMAGE}:${HASH}"
+          echo "Sandbox image: $IMG"
+          if docker image inspect "$IMG" >/dev/null 2>&1; then
+            echo "Already present on this runner — no build, no pull."
+          elif docker manifest inspect "$IMG" >/dev/null 2>&1; then
+            echo "In registry — pulling."
+            docker pull "$IMG"
+          else
+            echo "Sandbox inputs changed — building $IMG and publishing it."
+            docker build -t "$IMG" -f sandbox/Dockerfile .
+            docker push "$IMG" || echo "WARNING: push failed (registry creds?); using local image."
+          fi
+          # Name the eval config references.
+          docker tag "$IMG" ethpandaops-panda-sandbox:latest
+
+      - name: Mint panda-ci service-account credential
+        working-directory: tests/eval
+        env:
+          PANDA_CI_SVC_TOKEN: ${{ secrets.PANDA_CI_SVC_TOKEN }}
+        run: uv run python -m scripts.ci_auth
+
+      - name: Write server config (talks to the hosted production proxy as panda-ci)
+        run: |
+          cat > config.ci.yaml << EOF
+          server:
+            host: "0.0.0.0"
+            port: 2480
+            base_url: "http://127.0.0.1:2480"
+            sandbox_url: "http://127.0.0.1:2480"
+
+          sandbox:
+            backend: docker
+            image: "ethpandaops-panda-sandbox:latest"
+            network: "host"
+
+          proxy:
+            url: "${PANDA_PROXY_URL}"
+            auth:
+              # oidc mode = externally-minted token (ci_auth), empty resource. Without
+              # this the server defaults resource to the proxy URL, changing the
+              # credential-store digest so it never finds the token ci_auth wrote.
+              mode: "oidc"
+              issuer_url: "${PANDA_PROXY_OIDC_ISSUER}"
+              client_id: "panda-proxy"
+          EOF
+
+      - name: Configure panda CLI (CLI route shells out to `panda` -> local server)
+        run: |
+          mkdir -p "$HOME/.config/panda"
+          cat > "$HOME/.config/panda/config.yaml" << 'EOF'
+          server:
+            base_url: "http://localhost:2480"
+          EOF
+
+      - name: Cache embedding vectors (server's local vector cache)
+        # The server pulls ~9k embedding vectors from the proxy at startup to build
+        # its search indexes (~140s on a cold runner). The vectors are content-addressed
+        # ({model}:{sha256(text)}), so persisting this dir across runs lets the server
+        # read them off disk instead — server start drops to seconds. Rolling snapshot:
+        # run_id key always saves; restore-keys pulls the latest (incl. master's, which
+        # every branch can read), so only genuinely-new chunks re-fetch.
+        uses: actions/cache@v4
+        with:
+          path: ~/.panda/data/cache
+          key: panda-embed-cache-${{ github.run_id }}
+          restore-keys: panda-embed-cache-
+
+      - name: Start server
+        run: |
+          ./panda-server serve --config config.ci.yaml > server.log 2>&1 &
+          # Cold runners (no embedding cache) build the semantic-search indexes via
+          # the proxy at startup (~2-3 min) before /health is ready, so wait up to 4m
+          # and fail fast (don't let the eval run against a not-ready server).
+          for i in $(seq 1 120); do
+            if curl -sf http://localhost:2480/health >/dev/null 2>&1; then echo "server ready after $((i*2))s"; break; fi
+            echo "waiting for server... ($i/120)"; sleep 2
+          done
+          if ! curl -sf http://localhost:2480/health >/dev/null 2>&1; then
+            echo "ERROR: server not ready after 240s; last 60 log lines:"; tail -60 server.log; exit 1
+          fi
+
+      - name: Run smoke evals (opencode-go, panda CLI route)
+        working-directory: tests/eval
+        env:
+          OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MCP_EVAL_AGENT_API: opencode
+          MCP_EVAL_OPENCODE_ROUTE: cli
+          MCP_EVAL_MODEL: opencode-go/deepseek-v4-flash
+          MCP_EVAL_REASONING_EFFORT: high
+          MCP_EVAL_OPENCODE_TIMEOUT: "120"
+        run: |
+          uv run python -m pytest tests/test_smoke.py -m smoke \
+            -n 0 \
+            --junitxml=reports/junit.xml --tb=short
+
+      - name: Server log (sandbox / proxy activity)
+        if: always()
+        run: |
+          echo "===== panda-server log (last 150 lines) ====="
+          tail -150 server.log 2>/dev/null || echo "(no server.log)"
+          echo "===== docker ps (sandbox containers?) ====="
+          docker ps -a --format '{{.Image}} {{.Status}} {{.Names}}' 2>/dev/null | head || true
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-smoke-${{ github.run_id }}
+          path: tests/eval/reports/
+          retention-days: 14
+
+      - name: Publish smoke results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: tests/eval/reports/junit.xml
+          check_name: "Eval Smoke (opencode-go/deepseek-v4-flash)"
+          comment_mode: ${{ github.event_name == 'pull_request' && 'always' || 'off' }}
