@@ -4,8 +4,7 @@ Drives the model under test through an ``opencode serve`` instance using the
 opencode Python SDK, against panda's MCP tools. opencode runs the agentic
 tool-calling loop; this backend spawns/owns the server, sends each question as
 a session prompt, and maps the resulting transcript into the harness's
-``ExecutionResult`` so the DeepEval metrics, cost tracking, and traces stay
-backend-agnostic.
+``ExecutionResult`` so grading, cost tracking, and traces stay backend-agnostic.
 
 Two routes are supported via ``settings.opencode_route``:
 - ``mcp``: opencode is given panda's MCP server (execute_python/search/...).
@@ -58,9 +57,22 @@ def _free_port() -> int:
 # A single `opencode serve` is shared across all OpenCodeAgent instances with the
 # same config (keyed by the rendered opencode.json), so a pytest run with a
 # function-scoped agent fixture pays the server cold-start once, not per test.
-_SHARED_SERVERS: dict[str, "subprocess.Popen[bytes]"] = {}
+_SHARED_SERVERS: dict[str, subprocess.Popen[bytes]] = {}
 _SHARED_URLS: dict[str, str] = {}
+_SHARED_CONTAINERS: dict[str, str] = {}  # server key -> docker container name (sandbox mode)
 _ATEXIT_REGISTERED = False
+
+
+def _docker_rm(name: str | None) -> None:
+    """Force-remove a sandbox container; best-effort (idempotent if already gone)."""
+    if not name:
+        return
+    try:
+        subprocess.run(
+            ["docker", "rm", "-f", name], capture_output=True, timeout=20, check=False
+        )
+    except Exception:  # noqa: BLE001 - teardown is best-effort
+        pass
 
 
 def _cleanup_servers() -> None:
@@ -71,8 +83,11 @@ def _cleanup_servers() -> None:
                 proc.wait(timeout=5)
             except Exception:  # noqa: BLE001
                 proc.kill()
+    for name in list(_SHARED_CONTAINERS.values()):
+        _docker_rm(name)
     _SHARED_SERVERS.clear()
     _SHARED_URLS.clear()
+    _SHARED_CONTAINERS.clear()
 
 
 class OpenCodeAgent:
@@ -93,6 +108,9 @@ class OpenCodeAgent:
         self._proc: subprocess.Popen[bytes] | None = None
         self._base_url: str | None = None
         self._client: Any = None
+        # Serializes server spawn so concurrent first-runs on one agent don't race to
+        # start duplicate `opencode serve` processes.
+        self._ensure_lock = asyncio.Lock()
 
         # Langfuse trace export (optional; gated on langfuse_enabled + keys).
         self._langfuse: Any = None
@@ -131,6 +149,10 @@ class OpenCodeAgent:
         cfg: dict[str, Any] = {
             "$schema": "https://opencode.ai/config.json",
             "model": f"{self.provider_id}/{self.model_id}",
+            # Headless auto-approve, set HERE so the eval doesn't depend on (or inherit) the
+            # user's global ~/.config/opencode permission. Combined with the isolated
+            # XDG_CONFIG_HOME below, opencode runs from this config alone.
+            "permission": {"*": "allow"},
         }
         if self.route == "mcp":
             mcp_url = self.settings.mcp_url.rstrip("/") + "/mcp"
@@ -140,7 +162,16 @@ class OpenCodeAgent:
         return cfg
 
     async def _ensure_server(self) -> None:
-        # Reuse a live shared server for this exact config if we already have one.
+        # Fast path (lock-free): reuse a live shared server for this exact config.
+        if self._client is not None and self._server_key:
+            proc = _SHARED_SERVERS.get(self._server_key)
+            if proc is not None and proc.poll() is None:
+                return
+        async with self._ensure_lock:
+            await self._ensure_server_locked()
+
+    async def _ensure_server_locked(self) -> None:
+        # Re-check under the lock: a concurrent run may have already spawned the server.
         if self._client is not None and self._server_key:
             proc = _SHARED_SERVERS.get(self._server_key)
             if proc is not None and proc.poll() is None:
@@ -159,32 +190,27 @@ class OpenCodeAgent:
         base = _SHARED_URLS.get(key)
         if proc is None or proc.poll() is not None or not base:
             workdir = Path(tempfile.mkdtemp(prefix="panda-opencode-"))
-            (workdir / "opencode.json").write_text(
-                json.dumps(self._opencode_config(), indent=2)
-            )
-            # Isolate this serve's opencode data dir. opencode runs one server per
-            # user, all sharing ~/.local/share/opencode/opencode.db; under parallel
-            # pytest-xdist workers, N servers race the DB's first-time migration and
-            # all but one crash ("exited before ready: Performing one time database
-            # migration"). A per-serve XDG_DATA_HOME gives each its own fresh DB to
-            # migrate uncontended; auth is seeded in from the real data dir.
-            datadir = workdir / "share"
-            self._seed_auth(datadir)
-            env = os.environ.copy()
-            env["XDG_DATA_HOME"] = str(datadir)
+            (workdir / "opencode.json").write_text(json.dumps(self._opencode_config(), indent=2))
             log_path = workdir / "serve.log"
             port = _free_port()
+            container = None
+            if self.settings.opencode_sandbox:
+                cmd, cwd, env, container = self._docker_serve(workdir, port)
+            else:
+                cmd, cwd, env = self._host_serve(workdir, port)
             proc = subprocess.Popen(
-                ["opencode", "serve", "--port", str(port)],
-                cwd=str(workdir),
-                env=env,
-                stdout=open(log_path, "wb"),
-                stderr=subprocess.STDOUT,
+                cmd, cwd=cwd, env=env, stdout=open(log_path, "wb"), stderr=subprocess.STDOUT
             )
             base = f"http://127.0.0.1:{port}"
-            await self._wait_ready(proc, base, log_path)
+            try:
+                await self._wait_ready(proc, base, log_path)
+            except Exception:
+                _docker_rm(container)
+                raise
             _SHARED_SERVERS[key] = proc
             _SHARED_URLS[key] = base
+            if container:
+                _SHARED_CONTAINERS[key] = container
             global _ATEXIT_REGISTERED
             if not _ATEXIT_REGISTERED:
                 atexit.register(_cleanup_servers)
@@ -195,6 +221,72 @@ class OpenCodeAgent:
         from opencode_ai import AsyncOpencode
 
         self._client = AsyncOpencode(base_url=base, timeout=float(self.settings.opencode_timeout))
+
+    def _host_serve(
+        self, workdir: Path, port: int
+    ) -> tuple[list[str], str, dict[str, str]]:
+        """Run opencode on the host. Per-serve XDG dirs isolate it from the user's global
+        ~/.config/opencode (skills, plugins, providers, permissions) AND give each serve its
+        own fresh opencode.db to migrate uncontended (parallel serves otherwise race the
+        one-time DB migration and all but one crash). Auth is seeded into the data dir.
+
+        NOTE: host mode still shares the host filesystem — the agent's bash can read the repo
+        (and thus the eval cases). Use opencode_sandbox for the isolated, repo-blind run."""
+        datadir = workdir / "share"
+        confdir = workdir / "config"
+        confdir.mkdir(parents=True, exist_ok=True)
+        self._seed_auth(datadir)
+        env = os.environ.copy()
+        env["XDG_DATA_HOME"] = str(datadir)
+        env["XDG_CONFIG_HOME"] = str(confdir)
+        return (["opencode", "serve", "--port", str(port)], str(workdir), env)
+
+    def _docker_serve(
+        self, workdir: Path, port: int
+    ) -> tuple[list[str], None, dict[str, str], str]:
+        """Run opencode inside a container with NO repo mount — only a cross-compiled linux
+        `panda` binary + a panda config + the opencode auth are mounted in, and the panda
+        server is reached over host.docker.internal. The subject's bash sees the container's
+        filesystem, never the host's, so it cannot read the eval cases.
+
+        Foreground ``docker run`` (not -d) so the Popen tracks liveness/teardown exactly like
+        the host serve; ``--rm`` + an explicit name (force-removed on close) handle cleanup."""
+        panda_bin = os.environ.get("OPENCODE_SANDBOX_PANDA_BIN")
+        if not panda_bin or not Path(panda_bin).exists():
+            raise RuntimeError(
+                "opencode_sandbox is on but OPENCODE_SANDBOX_PANDA_BIN is unset or missing; "
+                "the harness must cross-build a linux panda binary first."
+            )
+        server_url = os.environ.get(
+            "OPENCODE_SANDBOX_SERVER_URL", "http://host.docker.internal:2481"
+        )
+        image = os.environ.get("OPENCODE_SANDBOX_IMAGE", "panda-opencode-eval:latest")
+        # Seed the FULL host opencode auth (a COPY of its content — the host file is never
+        # mounted) so every configured provider works in the sandbox: the opencode-go api key
+        # AND the openai oauth used by gpt-5.4-mini, etc. Mounted WRITABLE so opencode can
+        # refresh an oauth token in-container; the copy is discarded with the workdir.
+        src_base = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
+        src_auth = src_base / "opencode" / "auth.json"
+        (workdir / "auth.json").write_text(src_auth.read_text() if src_auth.exists() else "{}")
+        (workdir / "panda-config.yaml").write_text(f'server:\n  base_url: "{server_url}"\n')
+        # Mount the binary's DIRECTORY (image symlinks /usr/local/bin/panda -> it) so a
+        # rebuilt panda is picked up live; the dir holds only `panda`.
+        panda_dir = Path(panda_bin).resolve().parent
+        name = f"panda-oc-eval-{port}"
+        _docker_rm(name)  # clear any stale container on this port
+        cmd = [
+            "docker", "run", "--rm", "--name", name,
+            "-p", f"127.0.0.1:{port}:{port}",
+            "--add-host=host.docker.internal:host-gateway",
+            "-e", "OPENCODE_GO_API_KEY",  # pass through (value stays out of the arg list)
+            "-v", f"{panda_dir}:/opt/pandabin:ro",
+            "-v", f"{workdir / 'opencode.json'}:/work/opencode.json:ro",
+            "-v", f"{workdir / 'auth.json'}:/root/.local/share/opencode/auth.json",
+            "-v", f"{workdir / 'panda-config.yaml'}:/root/.config/panda/config.yaml:ro",
+            image,
+            "opencode", "serve", "--hostname", "0.0.0.0", "--port", str(port),
+        ]
+        return (cmd, None, os.environ.copy(), name)
 
     @staticmethod
     def _seed_auth(datadir: Path) -> None:
@@ -213,7 +305,7 @@ class OpenCodeAgent:
                 pass
 
     @staticmethod
-    async def _wait_ready(proc: "subprocess.Popen[bytes]", base: str, log_path: Path) -> None:
+    async def _wait_ready(proc: subprocess.Popen[bytes], base: str, log_path: Path) -> None:
         import httpx
 
         def _tail() -> str:
@@ -241,6 +333,7 @@ class OpenCodeAgent:
     def close(self) -> None:
         key = self._server_key
         proc = _SHARED_SERVERS.pop(key, None) if key else None
+        container = _SHARED_CONTAINERS.pop(key, None) if key else None
         if key:
             _SHARED_URLS.pop(key, None)
         target = proc or self._proc
@@ -250,6 +343,7 @@ class OpenCodeAgent:
                 target.wait(timeout=5)
             except Exception:  # noqa: BLE001
                 target.kill()
+        _docker_rm(container)  # no-op unless this was a sandboxed serve
         self._proc = None
         self._client = None
 
@@ -268,6 +362,16 @@ class OpenCodeAgent:
             return obj.model_dump(warnings=False)
         return obj if isinstance(obj, dict) else {}
 
+    @staticmethod
+    def _tool_duration_ms(state: dict[str, Any]) -> int:
+        """Per-tool wall time from opencode's tool-state ``time: {start, end}`` (ms)."""
+        t = state.get("time") or {}
+        start, end = t.get("start"), t.get("end")
+        if isinstance(start, (int, float)) and isinstance(end, (int, float)) and end >= start:
+            return int(end - start)
+        return 0
+
+
     def _prompt(self, prompt: str) -> str:
         if self.route == "cli":
             return f"Using the panda CLI, {prompt}"
@@ -283,11 +387,17 @@ class OpenCodeAgent:
         test_id: str | None = None,
     ) -> ExecutionResult:
         """Run one question through opencode; return an ExecutionResult for this turn."""
+        # Clear first: if _ensure_server() raises, current_trace_id must not retain the
+        # PREVIOUS run's id (else a caller would attach this failed run's scores there).
+        self._current_trace_id = None
         await self._ensure_server()
         start = time.time()
         # Langfuse trace ids are 32 lowercase hex chars (not UUID-dashed).
         self._current_trace_id = uuid.uuid4().hex if self._langfuse else None
         result = ExecutionResult(output="", session_id=session_id)
+        # Stamp the identity onto the result NOW so callers don't read it back off the
+        # mutable agent property after later awaits (race-safe across runs).
+        result.trace_id = self._current_trace_id
         client = self._client
 
         try:
@@ -312,7 +422,7 @@ class OpenCodeAgent:
                     ),
                     timeout=self.settings.opencode_timeout,
                 )
-            except (asyncio.TimeoutError, TimeoutError):
+            except TimeoutError:
                 raise RuntimeError(
                     f"opencode timed out after {self.settings.opencode_timeout:.0f}s"
                 ) from None
@@ -348,6 +458,7 @@ class OpenCodeAgent:
                         )
                         rec.result = st.get("output")
                         rec.is_error = st.get("status") == "error"
+                        rec.duration_ms = self._tool_duration_ms(st)
                         tool_calls.append(rec)
                         if self.settings.verbose:
                             print(f"  [Tool] {rec.name}({json.dumps(rec.input)[:120]})")
@@ -420,15 +531,19 @@ class OpenCodeAgent:
                         "error_message": result.error_message,
                         "num_turns": result.num_turns,
                         "ci_run_url": ci_run_url,
+                        "n_tools": len(result.tool_calls),
+                        "n_tool_errors": sum(1 for tc in result.tool_calls if tc.is_error),
                     },
                 ) as root_span:
+                    # One span per step with the FULL raw input + output — the reasoning
+                    # surface is the raw content of each step, not pre-digested fields.
                     for tc in result.tool_calls:
                         with self._langfuse.start_as_current_observation(
                             name=tc.name or "tool",
                             as_type="tool",
                             input=tc.input,
                             output=tc.result,
-                            metadata={"is_error": tc.is_error},
+                            metadata={"is_error": tc.is_error, "duration_ms": tc.duration_ms},
                         ):
                             pass
 

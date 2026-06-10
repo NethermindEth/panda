@@ -5,9 +5,22 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Default values - single source of truth
+# Default values - single source of truth. Everything else references these; don't
+# re-hardcode the strings at call sites.
 DEFAULT_AGENT_MODEL = "opencode-go/deepseek-v4-flash"
-DEFAULT_EVALUATOR_MODEL = "google/gemini-3.1-flash-lite"
+DEFAULT_AGENT_ROUTE = "cli"
+# A subject spec is "<provider>/<model>:<route>".
+DEFAULT_SUBJECT = f"{DEFAULT_AGENT_MODEL}:{DEFAULT_AGENT_ROUTE}"
+# The loop optimizes across TWO agent models by default, so a harness improvement has to
+# help BOTH (it can't overfit to one) — and two subjects double the confidence gate's cells.
+# Both ride the opencode-go provider, so one API key covers them (CI included).
+DEFAULT_SUBJECTS = [DEFAULT_SUBJECT, f"opencode-go/mimo-v2.5:{DEFAULT_AGENT_ROUTE}"]
+# Judge quality matters more than judge cost (~$0.004/grade): the lite tier produced
+# false-negatives on clearly-correct answers, and a flaky judge contaminates the harden
+# gates. gpt-5.4-mini is a strong rubric-follower, family-distinct from the subjects.
+DEFAULT_EVALUATOR_MODEL = "openai/gpt-5.4-mini"
+# The promptfoo grading provider: the evaluator model via OpenRouter.
+DEFAULT_GRADER = f"openrouter:{DEFAULT_EVALUATOR_MODEL}"
 
 
 class EvalSettings(BaseSettings):
@@ -30,6 +43,12 @@ class EvalSettings(BaseSettings):
         default="mcp",
         description="'mcp' gives opencode panda's MCP server; 'cli' gives it a shell "
         "+ the built `panda` binary and steers it through the CLI.",
+    )
+    opencode_sandbox: bool = Field(
+        default=False,
+        description="Run opencode inside a container with no repo mount (only a linux "
+        "`panda` binary + config) so the subject's bash can't read the eval cases. The "
+        "harness sets OPENCODE_SANDBOX_PANDA_BIN + OPENCODE_SANDBOX_SERVER_URL.",
     )
     opencode_timeout: float = Field(
         default=90.0,
@@ -97,10 +116,10 @@ class EvalSettings(BaseSettings):
         description="Directory for saving trace files",
     )
 
-    # DeepEval / Evaluator LLM settings
+    # Grader / evaluator LLM settings (the promptfoo llm-rubric judge default)
     evaluator_model: str = Field(
         default=DEFAULT_EVALUATOR_MODEL,
-        description="Model to use for LLM-based evaluation metrics. "
+        description="Default model for grading llm-rubric asserts. "
         "Supports OpenRouter models, OpenAI models, or Claude models.",
     )
 
