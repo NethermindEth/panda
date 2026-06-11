@@ -15,9 +15,9 @@ import (
 	"github.com/ethpandaops/panda/pkg/operations"
 )
 
-// slotsPerEpoch is the mainnet SLOTS_PER_EPOCH. Networks with a different value
-// will report an inaccurate derived slot.
-const slotsPerEpoch = 32
+// defaultSlotsPerEpoch is the mainnet SLOTS_PER_EPOCH, used when Dora does not
+// report the network's actual value.
+const defaultSlotsPerEpoch = 32
 
 func (s *service) handleDoraOperation(operationID string, w http.ResponseWriter, r *http.Request) bool {
 	switch operationID {
@@ -110,29 +110,27 @@ func (s *service) handleDoraNetworkOverview(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Prefer the head epoch, falling back to the latest finalized epoch when
-	// head is unavailable; only the fallback's outcome is surfaced to the caller.
-	data, _, err := s.doraAPIGet(r.Context(), baseURL, "/api/v1/epoch/head", nil)
+	data, status, err := s.doraAPIGet(r.Context(), baseURL, "/api/v1/network/overview", nil)
 	if err != nil {
-		data, status, err = s.doraAPIGet(r.Context(), baseURL, "/api/v1/epoch/latest", nil)
-		if err != nil {
-			writeAPIError(w, status, err.Error())
-			return
-		}
+		writeAPIError(w, status, err.Error())
+		return
 	}
 
-	payload, _ := data["data"].(map[string]any)
-	overview := map[string]any{
-		"current_epoch":      payload["epoch"],
-		"current_slot":       multiplyEpoch(payload["epoch"]),
-		"finalized":          payload["finalized"],
-		"participation_rate": payload["globalparticipationrate"],
+	payload, err := doraDataObject(data, "network overview")
+	if err != nil {
+		writeAPIError(w, http.StatusBadGateway, err.Error())
+		return
 	}
-	if validatorInfo, ok := payload["validatorinfo"].(map[string]any); ok {
-		overview["active_validator_count"] = validatorInfo["active"]
-		overview["total_validator_count"] = validatorInfo["total"]
-		overview["pending_validator_count"] = validatorInfo["pending"]
-		overview["exited_validator_count"] = validatorInfo["exited"]
+
+	overview, ok := doraOverview(payload)
+	if !ok {
+		writeAPIError(
+			w,
+			http.StatusBadGateway,
+			"Dora network overview is missing summary fields; upgrade Dora to a release whose /api/v1/network/overview includes them",
+		)
+
+		return
 	}
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
@@ -192,7 +190,7 @@ func (s *service) handleDoraDataGetPassthrough(
 		return
 	}
 
-	body, contentType, status, err := s.doraAPIGetRaw(r.Context(), baseURL, fmt.Sprintf(pathTemplate, identifier), nil)
+	body, contentType, status, err := s.doraAPIGetRaw(r.Context(), baseURL, fmt.Sprintf(pathTemplate, url.PathEscape(identifier)), nil)
 	if err != nil {
 		writeAPIError(w, status, err.Error())
 		return
@@ -228,7 +226,7 @@ func (s *service) handleDoraLink(w http.ResponseWriter, r *http.Request, pathTem
 
 	writeOperationResponse(s.log, w, http.StatusOK, operations.Response{
 		Kind: operations.ResultKindObject,
-		Data: map[string]any{"url": strings.TrimRight(baseURL, "/") + fmt.Sprintf(pathTemplate, identifier)},
+		Data: map[string]any{"url": strings.TrimRight(baseURL, "/") + fmt.Sprintf(pathTemplate, url.PathEscape(identifier))},
 		Meta: map[string]any{"network": optionalStringArg(req.Args, "network")},
 	})
 }
@@ -286,6 +284,9 @@ func (s *service) doraAPIGet(
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, http.StatusBadGateway, fmt.Errorf("invalid Dora JSON response: %w", err)
 	}
+	if status, ok := payload["status"].(string); ok && status != "" && !strings.EqualFold(status, "OK") {
+		return nil, http.StatusBadGateway, fmt.Errorf("dora API error: %s", status)
+	}
 
 	return payload, http.StatusOK, nil
 }
@@ -331,10 +332,13 @@ func (s *service) doraAPIGetRaw(
 	return body, contentType, http.StatusOK, nil
 }
 
-func multiplyEpoch(value any) any {
+func epochStartSlot(value any, slotsPerEpoch int64) any {
 	switch epoch := value.(type) {
 	case float64:
-		return epoch * slotsPerEpoch
+		if epoch != float64(int64(epoch)) {
+			return value
+		}
+		return int64(epoch) * slotsPerEpoch
 	case json.Number:
 		if parsed, err := epoch.Int64(); err == nil {
 			return parsed * slotsPerEpoch
@@ -346,4 +350,70 @@ func multiplyEpoch(value any) any {
 	}
 
 	return value
+}
+
+// doraOverview normalizes a Dora /api/v1/network/overview payload into the
+// overview shape exposed to clients. It reports false when the payload lacks
+// the flattened summary fields (older Dora releases).
+func doraOverview(payload map[string]any) (map[string]any, bool) {
+	if _, ok := numericValue(payload["current_epoch"]); !ok {
+		return nil, false
+	}
+
+	overview := make(map[string]any, len(payload)+2)
+	for key, value := range payload {
+		overview[key] = value
+	}
+
+	slots := doraSlotsPerEpoch(payload)
+	overview["current_epoch_start_slot"] = epochStartSlot(payload["current_epoch"], slots)
+
+	if _, ok := numericValue(payload["finalized_epoch"]); ok {
+		overview["finalized_epoch_start_slot"] = epochStartSlot(payload["finalized_epoch"], slots)
+	}
+
+	return overview, true
+}
+
+// doraSlotsPerEpoch reads the network's SLOTS_PER_EPOCH from the overview
+// payload, falling back to the mainnet default when it is not reported.
+func doraSlotsPerEpoch(payload map[string]any) int64 {
+	for _, key := range []string{"current_state", "metadata"} {
+		section, ok := payload[key].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if value, ok := numericValue(section["slots_per_epoch"]); ok && value > 0 {
+			return int64(value)
+		}
+	}
+
+	return defaultSlotsPerEpoch
+}
+
+func doraDataObject(payload map[string]any, label string) (map[string]any, error) {
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid Dora %s response: data is not an object", label)
+	}
+
+	return data, nil
+}
+
+// numericValue parses a number from a decoded Dora JSON payload, which only
+// ever yields float64, json.Number, or stringly-typed numbers.
+func numericValue(value any) (float64, bool) {
+	switch number := value.(type) {
+	case float64:
+		return number, true
+	case json.Number:
+		parsed, err := number.Float64()
+		return parsed, err == nil
+	case string:
+		parsed, err := strconv.ParseFloat(number, 64)
+		return parsed, err == nil
+	}
+
+	return 0, false
 }
