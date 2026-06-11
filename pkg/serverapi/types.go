@@ -82,6 +82,7 @@ type SearchExampleResult struct {
 	Description     string  `json:"description"`
 	Query           string  `json:"query"`
 	Target          string  `json:"target"`
+	Dataset         string  `json:"dataset,omitempty"`
 	SimilarityScore float64 `json:"similarity_score"`
 }
 
@@ -89,9 +90,11 @@ type SearchExamplesResponse struct {
 	Type                string                 `json:"type"`
 	Query               string                 `json:"query"`
 	CategoryFilter      string                 `json:"category_filter,omitempty"`
+	DatasetFilter       string                 `json:"dataset_filter,omitempty"`
 	TotalMatches        int                    `json:"total_matches"`
 	Results             []*SearchExampleResult `json:"results"`
 	AvailableCategories []string               `json:"available_categories"`
+	Guidance            []string               `json:"guidance,omitempty"`
 }
 
 type SearchRunbookResult struct {
@@ -99,7 +102,7 @@ type SearchRunbookResult struct {
 	Description     string   `json:"description"`
 	Tags            []string `json:"tags"`
 	Prerequisites   []string `json:"prerequisites"`
-	Content         string   `json:"content"`
+	Content         string   `json:"content,omitempty"`
 	FilePath        string   `json:"file_path"`
 	SimilarityScore float64  `json:"similarity_score"`
 }

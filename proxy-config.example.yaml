@@ -93,13 +93,28 @@ clickhouse:
     secure: true
     skip_verify: false
     timeout: 300
+    # Declare the datasets stored in this cluster. `dataset` must match a
+    # knowledge pack shipped with the release (see datasets/). `params` are
+    # opaque hints the pack interprets. `notes` says what distinguishes THIS
+    # copy from the dataset's other copies — nothing else: universal query
+    # knowledge belongs in the dataset pack, cluster-wide behavior in the
+    # datasource description. The proxy never interprets params or notes.
+    contains:
+      - dataset: xatu-raw
+        params: { database: default }
+      - dataset: otel-logs
+        params: { database: external }
+        notes: "Devnet/testnet node container logs (tracked networks)."
+      - dataset: otel-logs
+        params: { database: internal }
+        notes: "Operator platform/infrastructure logs (k8s clusters, sentries, services)."
     # Restrict access to members of specific GitHub orgs.
     # Omit or leave empty to allow all authenticated users.
     # allowed_orgs:
     #   - ethpandaops
 
   - name: clickhouse-refined
-    description: "Refined ClickHouse cluster with pre-aggregated Ethereum data"
+    description: "Refined ClickHouse cluster with pre-aggregated Ethereum data (distributed: wrap subqueries you JOIN against in GLOBAL)"
     host: "${CLICKHOUSE_REFINED_HOST}"
     port: 8443
     database: "${CLICKHOUSE_REFINED_DATABASE}"
@@ -108,6 +123,9 @@ clickhouse:
     secure: true
     skip_verify: false
     timeout: 300
+    contains:
+      - dataset: xatu-cbt
+        params: { database_pattern: "*" } # per-network databases (mainnet, holesky, …)
     # allowed_orgs:
     #   - ethpandaops
 
@@ -121,18 +139,26 @@ clickhouse:
     secure: true
     skip_verify: false
     timeout: 300
+    contains:
+      - dataset: xatu-raw
+        params: { database: default }
+        notes: "Devnet networks only."
     # allowed_orgs:
     #   - ethpandaops
 
   # Optional dynamic local datasource. The prober adds it only while /ping
   # returns "Ok." and the configured database exists.
   # - name: local-kurtosis
-  #   description: "Local Kurtosis devnet logs (OpenTelemetry, autodiscovered). ClickHouse db `otel`, table `otel_logs` (per-service devnet logs; level is in Body, not SeverityText). Filter by EnclaveName (one per devnet) and ServiceName."
+  #   description: "Local Kurtosis devnet logs (OpenTelemetry, autodiscovered)"
   #   host: localhost
   #   port: 18123
   #   database: otel
   #   autodiscover: true
   #   autodiscover_interval: 10s
+  #   contains:
+  #     - dataset: otel-logs
+  #       params: { database: otel }
+  #       notes: "Local Kurtosis devnet logs."
 
 # Prometheus instances
 prometheus:

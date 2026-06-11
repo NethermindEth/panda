@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -19,6 +20,7 @@ import (
 	"github.com/ethpandaops/panda/pkg/sandbox"
 	"github.com/ethpandaops/panda/pkg/types"
 
+	datasetsmodule "github.com/ethpandaops/panda/datasets"
 	blockarchivemodule "github.com/ethpandaops/panda/modules/block_archive"
 	cbtmodule "github.com/ethpandaops/panda/modules/cbt"
 	clickhousemodule "github.com/ethpandaops/panda/modules/clickhouse"
@@ -53,6 +55,17 @@ type App struct {
 	Cartographoor  cartographoor.CartographoorClient
 
 	refreshMu sync.Mutex
+
+	// discoveryRefreshArmed gates the proxy discovery hook: until the server
+	// build completes, module activation would race registry wiring on the
+	// main goroutine.
+	discoveryRefreshArmed atomic.Bool
+
+	registrarMu sync.Mutex
+	// moduleResourceRegistrar registers a late-activated module's resources
+	// with the (already-built) resource registry. Installed by the server
+	// builder when it arms the discovery refresh.
+	moduleResourceRegistrar func(module.Module)
 }
 
 // New creates a new App.
@@ -96,7 +109,7 @@ func (a *App) Build(ctx context.Context) error {
 	// datasources show up without a server restart. During the initial
 	// Discover (before step 4) no modules are initialized yet, so the hook is
 	// a no-op until the first background tick.
-	proxyClient, err := a.buildProxyClient(ctx, a.refreshModulesFromDiscovery)
+	proxyClient, err := a.buildProxyClient(ctx, a.onDiscoveryRefresh)
 	if err != nil {
 		_ = a.stop(ctx)
 
@@ -198,6 +211,7 @@ func (a *App) registerModules() *module.Registry {
 	reg.Add(blockarchivemodule.New())
 	reg.Add(cbtmodule.New())
 	reg.Add(clickhousemodule.New())
+	reg.Add(datasetsmodule.New())
 	reg.Add(doramodule.New())
 	reg.Add(ethnodemodule.New())
 	reg.Add(lokimodule.New())
@@ -331,6 +345,15 @@ func (a *App) startLocalProxyRoute(ctx context.Context, onDiscover func()) (*pro
 func (a *App) localProxyServerConfig() proxy.ServerConfig {
 	clickhouse := make([]proxy.ClickHouseClusterConfig, 0, len(a.cfg.LocalProxy.ClickHouse))
 	for _, item := range a.cfg.LocalProxy.ClickHouse {
+		contains := make([]proxy.DatasetBindingConfig, 0, len(item.Contains))
+		for _, b := range item.Contains {
+			contains = append(contains, proxy.DatasetBindingConfig{
+				Dataset: b.Dataset,
+				Params:  b.Params,
+				Notes:   b.Notes,
+			})
+		}
+
 		clickhouse = append(clickhouse, proxy.ClickHouseClusterConfig{
 			BaseDatasourceConfig: proxy.BaseDatasourceConfig{
 				Name:        item.Name,
@@ -344,6 +367,7 @@ func (a *App) localProxyServerConfig() proxy.ServerConfig {
 			Secure:               item.Secure,
 			Autodiscover:         item.Autodiscover,
 			AutodiscoverInterval: item.AutodiscoverInterval,
+			Contains:             contains,
 		})
 	}
 
@@ -356,6 +380,33 @@ func (a *App) localProxyServerConfig() proxy.ServerConfig {
 		},
 		ClickHouse: clickhouse,
 	}
+}
+
+// onDiscoveryRefresh is the proxy clients' discovery hook. It is inert until
+// the server build completes: the background refresh (the embedded local proxy
+// ticks every 5s) would otherwise activate modules concurrently with registry
+// wiring on the main goroutine.
+func (a *App) onDiscoveryRefresh() {
+	if !a.discoveryRefreshArmed.Load() {
+		return
+	}
+
+	a.refreshModulesFromDiscovery()
+}
+
+// ArmDiscoveryRefresh enables the background discovery hook and installs the
+// registrar used to register resources for modules that activate after the
+// server is built (e.g. a local Kurtosis datasource appearing later). It runs
+// one refresh immediately to catch datasources discovered while the hook was
+// still disarmed.
+func (a *App) ArmDiscoveryRefresh(registrar func(module.Module)) {
+	a.registrarMu.Lock()
+	a.moduleResourceRegistrar = registrar
+	a.registrarMu.Unlock()
+
+	a.discoveryRefreshArmed.Store(true)
+
+	a.refreshModulesFromDiscovery()
 }
 
 // refreshModulesFromDiscovery re-applies the proxy client's current datasource
@@ -450,6 +501,14 @@ func (a *App) activateModule(ctx context.Context, ext module.Module) {
 			Warn("Failed to start newly-initialized module after refresh")
 
 		return
+	}
+
+	a.registrarMu.Lock()
+	registrar := a.moduleResourceRegistrar
+	a.registrarMu.Unlock()
+
+	if registrar != nil {
+		registrar(ext)
 	}
 
 	a.log.WithField("module", ext.Name()).Info("Module activated after proxy discovery refresh")

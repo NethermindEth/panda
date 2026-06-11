@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -46,11 +47,12 @@ var skipUpdateCheckCommands = map[string]bool{
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "panda",
-	Short: "Ethereum network analytics CLI",
+	Use:     "panda",
+	Short:   "Ethereum network analytics CLI",
+	Version: fmt.Sprintf("%s (commit: %s, built: %s)", version.Version, version.GitCommit, version.BuildTime),
 	Long: `Ethereum network analytics CLI.
 
-New? Start here: panda getting-started`,
+New? Start here: panda getting-started — it walks the data-discovery workflow.`,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		level, err := logrus.ParseLevel(logLevel)
 		if err != nil {
@@ -92,6 +94,11 @@ func Execute() {
 		return
 	}
 
+	if hint := unknownCommandHint(err); hint != "" {
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, hint)
+	}
+
 	var exitErr *exitCodeError
 	if errors.As(err, &exitErr) {
 		os.Exit(exitErr.code)
@@ -109,7 +116,17 @@ func executeWithSignals() error {
 	return rootCmd.ExecuteContext(ctx)
 }
 
+func unknownCommandHint(err error) string {
+	if err == nil || !strings.Contains(err.Error(), "unknown command") {
+		return ""
+	}
+
+	return `Tip: panda has fixed workflow, discovery, and datasource commands; most topic words are search terms, not commands. Run 'panda getting-started' for the workflow.`
+}
+
 func init() {
+	rootCmd.SetVersionTemplate("panda version {{.Version}}\n")
+
 	rootCmd.AddGroup(
 		&cobra.Group{ID: groupWorkflow, Title: "Workflow:"},
 		&cobra.Group{ID: groupDiscovery, Title: "Discovery:"},

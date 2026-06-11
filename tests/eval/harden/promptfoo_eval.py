@@ -145,7 +145,11 @@ async def measure(
     timeout plus slack — it must always outlast the subject's own timeout, or promptfoo
     kills runs the subject would have finished (or cleanly timed out) itself."""
     if worker_timeout_ms is None:
-        worker_timeout_ms = (subject_timeout + 120) * 1000
+        # The worker hosts up to TWO subject attempts (provider.py retries once on a
+        # crash) plus teardown; sizing it for one attempt killed the worker mid-retry
+        # whenever the first attempt timed out — the retry mechanism was structurally
+        # dead for the exact failure class it exists for.
+        worker_timeout_ms = (2 * subject_timeout + 180) * 1000
     rd = Path(run_dir)
     rd.mkdir(parents=True, exist_ok=True)
     cfg_path = rd / "promptfooconfig.json"
@@ -360,4 +364,6 @@ def _write_trace_file(path: Path, trace: RunTrace, correct: bool, correctness: f
         lines.append(tc.output or "")
         lines.append("")
     lines.append(f"=== final answer ===\n{trace.output}")
+    if trace.crashed and getattr(trace, "error", ""):
+        lines.append(f"\n=== crash ===\n{trace.error}")
     path.write_text("\n".join(lines))

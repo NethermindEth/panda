@@ -13,14 +13,13 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ module.Module                        = (*Module)(nil)
-	_ module.DefaultEnabled                = (*Module)(nil)
-	_ module.CartographoorAware            = (*Module)(nil)
-	_ module.SandboxEnvProvider            = (*Module)(nil)
-	_ module.DatasourceInfoProvider        = (*Module)(nil)
-	_ module.ExamplesProvider              = (*Module)(nil)
-	_ module.PythonAPIDocsProvider         = (*Module)(nil)
-	_ module.GettingStartedSnippetProvider = (*Module)(nil)
+	_ module.Module                 = (*Module)(nil)
+	_ module.DefaultEnabled         = (*Module)(nil)
+	_ module.CartographoorAware     = (*Module)(nil)
+	_ module.SandboxEnvProvider     = (*Module)(nil)
+	_ module.DatasourceInfoProvider = (*Module)(nil)
+	_ module.ExamplesProvider       = (*Module)(nil)
+	_ module.PythonAPIDocsProvider  = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for the Dora module.
@@ -111,30 +110,6 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 			},
 		},
 	}
-}
-
-func (m *Module) GettingStartedSnippet() string {
-	return `## Dora Beacon Chain Explorer
-
-Query the Dora beacon chain explorer for network status, validators, and slots.
-Generate deep links to view data in the Dora web UI.
-
-` + "```python" + `
-from ethpandaops import dora
-
-# List networks with Dora explorers
-networks = dora.list_networks()
-
-# Get network overview
-overview = dora.get_network_overview("hoodi")
-print(f"Current epoch: {overview['current_epoch']}")
-
-# Look up a validator and get a deep link
-validator = dora.get_validator("hoodi", "12345")
-link = dora.link_validator("hoodi", "12345")
-print(f"View in Dora: {link}")
-` + "```" + `
-`
 }
 
 // SetCartographoorClient implements module.CartographoorAware.

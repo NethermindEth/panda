@@ -122,6 +122,22 @@ func (b *Builder) Build(ctx context.Context) (Service, error) {
 		toolReg,
 	)
 
+	// Arm the background discovery refresh only now that the registries exist:
+	// activation during build raced registry wiring, and modules that activate
+	// later (e.g. a local Kurtosis datasource appearing after startup) still
+	// need their resources registered.
+	application.ArmDiscoveryRefresh(func(ext module.Module) {
+		provider, ok := ext.(module.ResourceProvider)
+		if !ok {
+			return
+		}
+
+		if err := provider.RegisterResources(b.log, resourceReg); err != nil {
+			b.log.WithError(err).WithField("module", ext.Name()).
+				Warn("Failed to register resources for late-activated module")
+		}
+	})
+
 	cleanup := func(stopCtx context.Context) error {
 		var errs []error
 
@@ -233,9 +249,6 @@ func (b *Builder) buildResourceRegistry(
 	// Register datasources resources (from module registry).
 	resource.RegisterDatasourcesResources(b.log, reg, moduleReg)
 
-	// Register examples resources (from module registry).
-	resource.RegisterExamplesResources(b.log, reg, moduleReg)
-
 	// Register networks resources.
 	resource.RegisterNetworksResources(b.log, reg, cartographoorClient)
 
@@ -243,9 +256,9 @@ func (b *Builder) buildResourceRegistry(
 	resource.RegisterAPIResources(b.log, reg, moduleReg)
 
 	// Register getting-started resource.
-	resource.RegisterGettingStartedResources(b.log, reg, toolReg, moduleReg)
+	resource.RegisterGettingStartedResources(b.log, reg, toolReg)
 
-	// Register module-specific resources (e.g., clickhouse://tables).
+	// Register module-specific resources (e.g., clickhouse://tables/{cluster}).
 	for _, ext := range moduleReg.Initialized() {
 		provider, ok := ext.(module.ResourceProvider)
 		if !ok {

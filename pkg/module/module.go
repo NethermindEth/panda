@@ -84,7 +84,7 @@ type DatasourceInfoProvider interface {
 	DatasourceInfo() []types.DatasourceInfo
 }
 
-// ExamplesProvider contributes search examples and examples:// resources.
+// ExamplesProvider contributes query examples to the semantic search index.
 type ExamplesProvider interface {
 	Examples() map[string]types.ExampleCategory
 }
@@ -92,11 +92,6 @@ type ExamplesProvider interface {
 // PythonAPIDocsProvider contributes Python module docs.
 type PythonAPIDocsProvider interface {
 	PythonAPIDocs() map[string]types.ModuleDoc
-}
-
-// GettingStartedSnippetProvider contributes snippets to the getting-started resource.
-type GettingStartedSnippetProvider interface {
-	GettingStartedSnippet() string
 }
 
 // ResourceProvider contributes custom MCP resources.

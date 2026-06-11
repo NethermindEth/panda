@@ -9,7 +9,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sirupsen/logrus"
 
-	"github.com/ethpandaops/panda/pkg/module"
 	"github.com/ethpandaops/panda/pkg/types"
 )
 
@@ -18,52 +17,60 @@ type ToolLister interface {
 	List() []mcp.Tool
 }
 
-// gettingStartedHeaderMCP contains the MCP workflow guidance.
+// gettingStartedHeaderMCP contains the MCP workflow guidance. It teaches the
+// system only: no dataset, datasource, table, or network is ever named here —
+// those facts live behind the resources this guide points at.
 const gettingStartedHeaderMCP = `# Getting Started Guide
 
 ## Workflow
 
-1. **Discover** → Read datasource resources to find available data sources and schemas
-2. **Find patterns** → Use the ` + "`search`" + ` tool to find relevant examples and procedures:
+1. **Discover** → ` + "`datasets://list`" + ` shows the datasets this deployment holds; ` + "`datasources://list`" + ` shows the connections that hold them (placement params + operator notes); ` + "`networks://active`" + ` shows live network/devnet ids
+2. **Learn the data** → **read ` + "`datasets://{name}`" + ` before querying a dataset** — its required syntax rules and placement live there. Live schema: ` + "`clickhouse://tables/{cluster}/{database}`" + `
+3. **Find patterns** → Use the ` + "`search`" + ` tool to find relevant examples and procedures:
    - ` + "`search(query=\"...\")`" + ` → Search everything (examples, runbooks, EIPs, consensus specs)
-   - ` + "`search(type=\"examples\", query=\"...\")`" + ` → Query snippets only
+   - ` + "`search(type=\"examples\", query=\"...\", dataset=\"...\")`" + ` → Query snippets, optionally scoped to one dataset
    - ` + "`search(type=\"runbooks\", query=\"...\")`" + ` → Investigation procedures only
    - ` + "`search(type=\"consensus-specs\", query=\"...\")`" + ` → Consensus-specs documents and protocol constants
-3. **Execute** → ` + "`execute_python`" + ` tool with the ethpandaops library
+4. **Execute** → ` + "`execute_python`" + ` tool with the ethpandaops library; Python module APIs: ` + "`python://ethpandaops`" + `
 
 `
 
 // gettingStartedHeaderCLI contains the CLI workflow guidance.
 const gettingStartedHeaderCLI = `# Getting Started Guide
 
-## Preferred Workflow: panda execute
+## Preferred Workflow
 
-**Always use ` + "`panda execute`" + ` for data analysis.** This is the Python sandbox — the same
-engine used by MCP clients via ` + "`execute_python`" + `. It provides:
+Use the narrowest surface that fits the question:
 
-- **Workspace persistence** between calls (files saved to ` + "`/workspace/`" + ` survive across executions)
-- **Multi-turn workflows** (query → save → load → plot across separate calls)
-- **Token efficiency** (one command handles any datasource type)
-- **Full ethpandaops library** (clickhouse, prometheus, loki, dora, ethnode, storage)
+- **One SQL answer**: ` + "`panda clickhouse query-raw <datasource> \"<SQL>\"`" + `
+- **One PromQL answer**: ` + "`panda prometheus query <datasource> \"<promql>\"`" + `
+- **Python, plots, files, or cross-source joins**: ` + "`panda execute`" + `
 
-While module-specific CLI commands exist (e.g. ` + "`panda clickhouse query`" + `), **prefer
-` + "`panda execute`" + `** because it supports multi-step workflows with workspace persistence
-that module commands cannot provide.
+Search examples name the target datasource for SQL snippets. Read the dataset
+guide first when an example names a dataset.
+
+` + "`panda execute`" + ` is the Python sandbox — the same engine used by MCP clients via
+` + "`execute_python`" + `. It provides workspace persistence between calls, multi-step
+workflows, and the full ethpandaops library (clickhouse, prometheus, loki,
+dora, ethnode, storage).
 
 ### Quick Start
 
 ` + "```" + `
-panda execute --code '
-from ethpandaops import clickhouse
-df = clickhouse.query("clickhouse-refined", "SHOW DATABASES")
-print(df)
-'
+panda datasets
+panda search examples "<topic>"
+panda clickhouse query-raw <Target> "<SQL from the example, adjusted for the question>"
 ` + "```" + `
 
-### Discovery
+For Python workflows:
 
-Run ` + "`panda --help`" + ` to see all available commands and ` + "`panda resources`" + ` to list
-available data resources. Use ` + "`panda <command> --help`" + ` for details on any command.
+` + "```" + `
+panda execute <<'PY'
+from ethpandaops import clickhouse
+df = clickhouse.query("<datasource>", "SELECT ...")
+print(df)
+PY
+` + "```" + `
 
 `
 
@@ -80,7 +87,7 @@ const gettingStartedFooterMCP = `
 **Example - Multi-step workflow:**
 ` + "```python" + `
 # Call 1: Query and SAVE to workspace
-df = clickhouse.query("clickhouse-refined", "SELECT ...")
+df = clickhouse.query("<datasource>", "SELECT ...")
 df.to_parquet("/workspace/data.parquet")  # Persist!
 ` + "```" + `
 
@@ -108,21 +115,21 @@ const gettingStartedFooterCLI = `
 
 **Example — Multi-step workflow:**
 ` + "```" + `
-panda execute --code '
-df = clickhouse.query("clickhouse-refined", "SELECT ...")
+panda execute <<'PY'
+df = clickhouse.query("<datasource>", "SELECT ...")
 df.to_parquet("/workspace/data.parquet")
-'
+PY
 ` + "```" + `
 
 ` + "```" + `
-panda execute --code '
+panda execute --session <id> <<'PY'
 import pandas as pd
 df = pd.read_parquet("/workspace/data.parquet")
 plt.plot(df["time"], df["value"])
 plt.savefig("/workspace/chart.png")
 url = storage.upload("/workspace/chart.png")
 print(url)
-'
+PY
 ` + "```" + `
 
 Use ` + "`storage.upload()`" + ` for permanent public URLs (see ` + "`panda docs storage`" + ` for API details).
@@ -134,7 +141,6 @@ func RegisterGettingStartedResources(
 	log logrus.FieldLogger,
 	reg Registry,
 	toolReg ToolLister,
-	moduleReg *module.Registry,
 ) {
 	log = log.WithField("resource", "getting_started")
 
@@ -146,7 +152,7 @@ func RegisterGettingStartedResources(
 			mcp.WithMIMEType("text/markdown"),
 			mcp.WithAnnotations([]mcp.Role{mcp.RoleAssistant}, 1.0, ""),
 		),
-		Handler: createGettingStartedHandler(reg, toolReg, moduleReg),
+		Handler: createGettingStartedHandler(reg, toolReg),
 	})
 
 	log.Debug("Registered getting-started resource")
@@ -157,7 +163,6 @@ func RegisterGettingStartedResources(
 func createGettingStartedHandler(
 	reg Registry,
 	toolReg ToolLister,
-	moduleReg *module.Registry,
 ) ReadHandler {
 	return func(ctx context.Context, _ string) (string, error) {
 		clientCtx := types.GetClientContext(ctx)
@@ -170,12 +175,6 @@ func createGettingStartedHandler(
 			sb.WriteString(gettingStartedHeaderCLI)
 		default:
 			sb.WriteString(gettingStartedHeaderMCP)
-		}
-
-		// Module snippets are factual reference — same for all contexts.
-		snippets := moduleReg.GettingStartedSnippets()
-		if snippets != "" {
-			sb.WriteString(snippets)
 		}
 
 		// Context-specific tools/commands section.
@@ -253,19 +252,25 @@ func writeResourcesSection(sb *strings.Builder, reg Registry) {
 
 // writeCLIDiscoverySection writes CLI discovery instructions.
 func writeCLIDiscoverySection(sb *strings.Builder) {
-	sb.WriteString("## Discovering Commands and Resources\n\n")
+	sb.WriteString("## Discovering Data\n\n")
+	sb.WriteString("- `panda datasets` — datasets in this deployment and where they live\n")
+	sb.WriteString("- `panda datasets <name>` — **read before querying a dataset**: required syntax rules and placement\n")
+	sb.WriteString("- `panda datasources` — connections and the datasets each one holds\n")
+	sb.WriteString("- `panda resources read networks://active` — live network/devnet ids; use the id, not the display name, when reading `networks://<id>`\n")
+	sb.WriteString("- `panda schema` — live ClickHouse schemas\n")
+	sb.WriteString("- `panda docs` — Python module APIs\n")
+	sb.WriteString("\n## Discovering Commands\n\n")
 	sb.WriteString("Run `panda --help` to see all available commands.\n")
 	sb.WriteString("Run `panda resources` to list available data resources.\n")
 	sb.WriteString("Run `panda <command> --help` for details on any command.\n")
 	sb.WriteString("\n## Finding Examples and Procedures\n\n")
 	sb.WriteString("Before writing a query from scratch, search for prior art:\n\n")
-	sb.WriteString("- `panda search examples \"<topic>\"` — query snippets (e.g. \"blob count\", \"attestation propagation\")\n")
-	sb.WriteString("- `panda search runbooks \"<topic>\"` — investigation procedures (e.g. \"devnet logs\", \"finality delay\")\n")
+	sb.WriteString("- `panda search examples \"<topic>\"` — query snippets\n")
+	sb.WriteString("- `panda search runbooks \"<topic>\"` — investigation procedures\n")
 	sb.WriteString("- `panda search eips \"<topic>\"` — EIP specifications\n")
 	sb.WriteString("- `panda search consensus-specs \"<topic>\"` — consensus-spec constants and documents\n")
 	sb.WriteString("- `panda search \"<topic>\"` — search everything at once\n")
 	sb.WriteString("\nRunbooks codify how to debug specific scenarios end-to-end ")
 	sb.WriteString("(which datasources to query, which fields to filter on, common pitfalls). ")
-	sb.WriteString("For anything non-trivial — debugging a devnet, investigating a slow query, ")
-	sb.WriteString("tracing blob propagation — start here instead of probing raw tables.\n")
+	sb.WriteString("For anything non-trivial, start with a runbook search instead of probing raw tables.\n")
 }

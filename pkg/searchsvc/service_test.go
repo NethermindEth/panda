@@ -182,7 +182,7 @@ func TestSearchExamplesNilIndex(t *testing.T) {
 
 	svc := New(nil, nil, nil, nil, nil, nil, nil, nil)
 
-	_, err := svc.SearchExamples("query", "", 3)
+	_, err := svc.SearchExamples("query", "", "", 3)
 	require.Error(t, err)
 }
 
@@ -206,7 +206,7 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 		searcher := &stubExampleSearcher{results: results}
 		svc := New(searcher, newExampleRegistry(t, categories), nil, nil, nil, nil, nil, nil)
 
-		resp, err := svc.SearchExamples("q", "", 5)
+		resp, err := svc.SearchExamples("q", "", "", 5)
 		require.NoError(t, err)
 
 		assert.Len(t, resp.Results, 2)
@@ -226,7 +226,7 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 		searcher := &stubExampleSearcher{results: results}
 		svc := New(searcher, newExampleRegistry(t, categories), nil, nil, nil, nil, nil, nil)
 
-		resp, err := svc.SearchExamples("q", "blocks", 4)
+		resp, err := svc.SearchExamples("q", "blocks", "", 4)
 		require.NoError(t, err)
 
 		require.Len(t, resp.Results, 1)
@@ -235,13 +235,81 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 		assert.Equal(t, 4*exampleFilterOverscan, searcher.lastLimit)
 	})
 
+	t.Run("dataset filter restricts results and overscans", func(t *testing.T) {
+		t.Parallel()
+
+		stamped := []resource.SearchResult{
+			{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "raw", Target: "clickhouse-raw", Dataset: "xatu-raw"}, Score: 0.9},
+			{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "cbt", Target: "clickhouse-refined", Dataset: "xatu-cbt"}, Score: 0.8},
+		}
+		stampedCategories := map[string]types.ExampleCategory{
+			"blocks": {Name: "Blocks", Examples: []types.Example{
+				{Name: "raw", Dataset: "xatu-raw"},
+				{Name: "cbt", Dataset: "xatu-cbt"},
+			}},
+		}
+
+		searcher := &stubExampleSearcher{results: stamped}
+		svc := New(searcher, newExampleRegistry(t, stampedCategories), nil, nil, nil, nil, nil, nil)
+
+		resp, err := svc.SearchExamples("q", "", "xatu-cbt", 4)
+		require.NoError(t, err)
+
+		require.Len(t, resp.Results, 1)
+		assert.Equal(t, "cbt", resp.Results[0].ExampleName)
+		assert.Equal(t, "xatu-cbt", resp.Results[0].Dataset)
+		assert.Equal(t, "xatu-cbt", resp.DatasetFilter)
+		assert.Contains(t, resp.Guidance, "The target field is the datasource name the example is intended to run against.")
+		assert.Contains(t, resp.Guidance, "The dataset field identifies the knowledge pack; read datasets://<dataset> for placement and required syntax before querying that dataset.")
+		assert.Equal(t, 4*exampleFilterOverscan, searcher.lastLimit)
+	})
+
+	t.Run("guidance notes multiple targets", func(t *testing.T) {
+		t.Parallel()
+
+		stamped := []resource.SearchResult{
+			{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "one", Target: "warehouse-a", Dataset: "pack-a"}, Score: 0.9},
+			{CategoryKey: "blocks", CategoryName: "Blocks", Example: types.Example{Name: "two", Target: "warehouse-b", Dataset: "pack-b"}, Score: 0.8},
+		}
+		stampedCategories := map[string]types.ExampleCategory{
+			"blocks": {Name: "Blocks", Examples: []types.Example{
+				{Name: "one", Dataset: "pack-a"},
+				{Name: "two", Dataset: "pack-b"},
+			}},
+		}
+
+		searcher := &stubExampleSearcher{results: stamped}
+		svc := New(searcher, newExampleRegistry(t, stampedCategories), nil, nil, nil, nil, nil, nil)
+
+		resp, err := svc.SearchExamples("q", "", "", 3)
+		require.NoError(t, err)
+
+		assert.Contains(t, resp.Guidance, "When relevant examples span multiple targets, run each SQL query against its own target; combine bounded intermediate results in Python or another client-side step instead of writing one cross-datasource SQL query.")
+	})
+
+	t.Run("unknown dataset errors with available list", func(t *testing.T) {
+		t.Parallel()
+
+		stampedCategories := map[string]types.ExampleCategory{
+			"blocks": {Name: "Blocks", Examples: []types.Example{{Name: "raw", Dataset: "xatu-raw"}}},
+		}
+
+		searcher := &stubExampleSearcher{}
+		svc := New(searcher, newExampleRegistry(t, stampedCategories), nil, nil, nil, nil, nil, nil)
+
+		_, err := svc.SearchExamples("q", "", "nope", 3)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown dataset")
+		assert.Contains(t, err.Error(), "xatu-raw")
+	})
+
 	t.Run("unknown category errors", func(t *testing.T) {
 		t.Parallel()
 
 		searcher := &stubExampleSearcher{results: results}
 		svc := New(searcher, newExampleRegistry(t, categories), nil, nil, nil, nil, nil, nil)
 
-		_, err := svc.SearchExamples("q", "missing", 3)
+		_, err := svc.SearchExamples("q", "missing", "", 3)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown category")
 	})
@@ -252,7 +320,7 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 		searcher := &stubExampleSearcher{results: results}
 		svc := New(searcher, newExampleRegistry(t, categories), nil, nil, nil, nil, nil, nil)
 
-		resp, err := svc.SearchExamples("q", "", 1)
+		resp, err := svc.SearchExamples("q", "", "", 1)
 		require.NoError(t, err)
 		assert.Len(t, resp.Results, 1)
 	})
@@ -263,7 +331,7 @@ func TestSearchExamplesScoreAndCategoryFilter(t *testing.T) {
 		searcher := &stubExampleSearcher{err: fmt.Errorf("boom")}
 		svc := New(searcher, newExampleRegistry(t, categories), nil, nil, nil, nil, nil, nil)
 
-		_, err := svc.SearchExamples("q", "", 3)
+		_, err := svc.SearchExamples("q", "", "", 3)
 		require.Error(t, err)
 	})
 }
@@ -472,6 +540,17 @@ func TestSearchAll(t *testing.T) {
 		exampleSearcher := &stubExampleSearcher{results: []resource.SearchResult{
 			{CategoryKey: "blocks", Example: types.Example{Name: "ex"}, Score: 0.9},
 		}}
+		runbookSearcher := &stubRunbookSearcher{results: []resource.RunbookSearchResult{
+			{
+				Runbook: types.Runbook{
+					Name:        "Debug",
+					Description: "Debug a network.",
+					Tags:        []string{"debugging"},
+					Content:     "full runbook body",
+				},
+				Score: 0.9,
+			},
+		}}
 		specsSearcher := &stubSpecsSearcher{specs: []resource.ConsensusSpecSearchResult{
 			{Spec: types.ConsensusSpec{Fork: "deneb", Topic: "beacon-chain"}, Score: 0.9},
 		}}
@@ -479,7 +558,7 @@ func TestSearchAll(t *testing.T) {
 		svc := New(
 			exampleSearcher,
 			newExampleRegistry(t, map[string]types.ExampleCategory{"blocks": {Name: "Blocks"}}),
-			nil, nil,
+			runbookSearcher, &stubRunbookTags{tags: []string{"debugging"}},
 			nil, nil,
 			specsSearcher, &stubSpecsMetadata{forks: []string{"deneb"}},
 		)
@@ -489,9 +568,13 @@ func TestSearchAll(t *testing.T) {
 
 		assert.Equal(t, "all", resp.Type)
 		require.NotNil(t, resp.Examples)
+		require.NotNil(t, resp.Runbooks)
 		require.NotNil(t, resp.Specs)
-		assert.Nil(t, resp.Runbooks)
 		assert.Nil(t, resp.EIPs)
+		require.Len(t, resp.Runbooks.Results, 1)
+		assert.Empty(t, resp.Runbooks.Results[0].Content)
+		require.Len(t, runbookSearcher.results, 1)
+		assert.Equal(t, "full runbook body", runbookSearcher.results[0].Runbook.Content)
 	})
 
 	t.Run("empty service returns no sections", func(t *testing.T) {

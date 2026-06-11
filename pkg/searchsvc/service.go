@@ -78,6 +78,7 @@ type SearchExampleResult struct {
 	Description     string  `json:"description"`
 	Query           string  `json:"query"`
 	Target          string  `json:"target"`
+	Dataset         string  `json:"dataset,omitempty"`
 	SimilarityScore float64 `json:"similarity_score"`
 }
 
@@ -85,9 +86,11 @@ type SearchExamplesResponse struct {
 	Type                string                 `json:"type"`
 	Query               string                 `json:"query"`
 	CategoryFilter      string                 `json:"category_filter,omitempty"`
+	DatasetFilter       string                 `json:"dataset_filter,omitempty"`
 	TotalMatches        int                    `json:"total_matches"`
 	Results             []*SearchExampleResult `json:"results"`
 	AvailableCategories []string               `json:"available_categories"`
+	Guidance            []string               `json:"guidance,omitempty"`
 }
 
 type SearchRunbookResult struct {
@@ -95,7 +98,7 @@ type SearchRunbookResult struct {
 	Description     string   `json:"description"`
 	Tags            []string `json:"tags"`
 	Prerequisites   []string `json:"prerequisites"`
-	Content         string   `json:"content"`
+	Content         string   `json:"content,omitempty"`
 	FilePath        string   `json:"file_path"`
 	SimilarityScore float64  `json:"similarity_score"`
 }
@@ -226,7 +229,7 @@ func NormalizeSearchType(searchType string) (string, error) {
 	}
 }
 
-func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*SearchExamplesResponse, error) {
+func (s *Service) SearchExamples(query, categoryFilter, datasetFilter string, limit int) (*SearchExamplesResponse, error) {
 	if s.exampleIndex == nil {
 		return nil, fmt.Errorf("example search index not available")
 	}
@@ -235,8 +238,16 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 
 	examples := resource.GetQueryExamples(s.moduleReg)
 	categories := make([]string, 0, len(examples))
-	for key := range examples {
+	datasets := make(map[string]bool, 4)
+
+	for key, cat := range examples {
 		categories = append(categories, key)
+
+		for _, ex := range cat.Examples {
+			if ex.Dataset != "" {
+				datasets[ex.Dataset] = true
+			}
+		}
 	}
 
 	sort.Strings(categories)
@@ -251,8 +262,23 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 		}
 	}
 
+	if datasetFilter != "" && !datasets[datasetFilter] {
+		names := make([]string, 0, len(datasets))
+		for name := range datasets {
+			names = append(names, name)
+		}
+
+		sort.Strings(names)
+
+		return nil, fmt.Errorf(
+			"unknown dataset: %q. Available datasets: %s",
+			datasetFilter,
+			strings.Join(names, ", "),
+		)
+	}
+
 	searchLimit := limit
-	if categoryFilter != "" {
+	if categoryFilter != "" || datasetFilter != "" {
 		searchLimit = limit * exampleFilterOverscan
 	}
 
@@ -271,6 +297,10 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 			continue
 		}
 
+		if datasetFilter != "" && result.Example.Dataset != datasetFilter {
+			continue
+		}
+
 		searchResults = append(searchResults, &SearchExampleResult{
 			CategoryKey:     result.CategoryKey,
 			CategoryName:    result.CategoryName,
@@ -278,6 +308,7 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 			Description:     result.Example.Description,
 			Query:           result.Example.Query,
 			Target:          result.Example.Target,
+			Dataset:         result.Example.Dataset,
 			SimilarityScore: result.Score,
 		})
 
@@ -290,10 +321,50 @@ func (s *Service) SearchExamples(query, categoryFilter string, limit int) (*Sear
 		Type:                SearchTypeExamples,
 		Query:               query,
 		CategoryFilter:      categoryFilter,
+		DatasetFilter:       datasetFilter,
 		TotalMatches:        len(searchResults),
 		Results:             searchResults,
 		AvailableCategories: categories,
+		Guidance:            exampleSearchGuidance(searchResults),
 	}, nil
+}
+
+func exampleSearchGuidance(results []*SearchExampleResult) []string {
+	if len(results) == 0 {
+		return nil
+	}
+
+	var hasDataset, hasTarget bool
+	targets := make(map[string]struct{})
+	for _, result := range results {
+		if result == nil {
+			continue
+		}
+
+		hasDataset = hasDataset || result.Dataset != ""
+		hasTarget = hasTarget || result.Target != ""
+		if result.Target != "" {
+			targets[result.Target] = struct{}{}
+		}
+	}
+
+	guidance := []string{
+		"Examples are reusable patterns: replace placeholders and concrete filters for the user's network, time window, or object before executing.",
+	}
+
+	if hasTarget {
+		guidance = append(guidance, "The target field is the datasource name the example is intended to run against.")
+	}
+
+	if len(targets) > 1 {
+		guidance = append(guidance, "When relevant examples span multiple targets, run each SQL query against its own target; combine bounded intermediate results in Python or another client-side step instead of writing one cross-datasource SQL query.")
+	}
+
+	if hasDataset {
+		guidance = append(guidance, "The dataset field identifies the knowledge pack; read datasets://<dataset> for placement and required syntax before querying that dataset.")
+	}
+
+	return guidance
 }
 
 func (s *Service) SearchRunbooks(query, tagFilter string, limit int) (*SearchRunbooksResponse, error) {
@@ -559,7 +630,7 @@ func (s *Service) SearchAll(query string, limit int) (*SearchAllResponse, error)
 	}
 
 	if s.exampleIndex != nil {
-		examples, err := s.SearchExamples(query, "", limit)
+		examples, err := s.SearchExamples(query, "", "", limit)
 		if err == nil {
 			resp.Examples = examples
 		}
@@ -568,7 +639,7 @@ func (s *Service) SearchAll(query string, limit int) (*SearchAllResponse, error)
 	if s.runbookIndex != nil && s.runbookReg != nil {
 		runbooks, err := s.SearchRunbooks(query, "", limit)
 		if err == nil {
-			resp.Runbooks = runbooks
+			resp.Runbooks = summarizeRunbooks(runbooks)
 		}
 	}
 
@@ -587,6 +658,27 @@ func (s *Service) SearchAll(query string, limit int) (*SearchAllResponse, error)
 	}
 
 	return resp, nil
+}
+
+func summarizeRunbooks(resp *SearchRunbooksResponse) *SearchRunbooksResponse {
+	if resp == nil {
+		return nil
+	}
+
+	summary := *resp
+	summary.Results = make([]*SearchRunbookResult, 0, len(resp.Results))
+
+	for _, result := range resp.Results {
+		if result == nil {
+			continue
+		}
+
+		item := *result
+		item.Content = ""
+		summary.Results = append(summary.Results, &item)
+	}
+
+	return &summary
 }
 
 func clampSearchLimit(limit, max int) int {

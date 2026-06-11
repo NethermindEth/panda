@@ -13,14 +13,13 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ module.Module                        = (*Module)(nil)
-	_ module.DefaultEnabled                = (*Module)(nil)
-	_ module.CartographoorAware            = (*Module)(nil)
-	_ module.SandboxEnvProvider            = (*Module)(nil)
-	_ module.DatasourceInfoProvider        = (*Module)(nil)
-	_ module.ExamplesProvider              = (*Module)(nil)
-	_ module.PythonAPIDocsProvider         = (*Module)(nil)
-	_ module.GettingStartedSnippetProvider = (*Module)(nil)
+	_ module.Module                 = (*Module)(nil)
+	_ module.DefaultEnabled         = (*Module)(nil)
+	_ module.CartographoorAware     = (*Module)(nil)
+	_ module.SandboxEnvProvider     = (*Module)(nil)
+	_ module.DatasourceInfoProvider = (*Module)(nil)
+	_ module.ExamplesProvider       = (*Module)(nil)
+	_ module.PythonAPIDocsProvider  = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for the CBT module.
@@ -116,34 +115,6 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 			},
 		},
 	}
-}
-
-func (m *Module) GettingStartedSnippet() string {
-	return `## CBT (ClickHouse Build Tool)
-
-Query CBT for data model metadata, transformation status, coverage, and bounds.
-Generate deep links to view models in the CBT web UI.
-
-` + "```python" + `
-from ethpandaops import cbt
-
-# List networks with CBT instances
-networks = cbt.list_networks()
-
-# List all models for a network
-models = cbt.list_models("mainnet")
-print(f"Total models: {len(models)}")
-
-# Check transformation coverage
-coverage = cbt.get_transformation_coverage("mainnet")
-for c in coverage:
-    print(f"  {c.get('id')}: {c}")
-
-# Generate a deep link to a model
-link = cbt.link_model("mainnet", "default.beacon_api_eth_v1_events_block")
-print(f"View in CBT: {link}")
-` + "```" + `
-`
 }
 
 // SetCartographoorClient implements module.CartographoorAware.

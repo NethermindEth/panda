@@ -14,13 +14,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ module.Module                        = (*Module)(nil)
-	_ module.DefaultEnabled                = (*Module)(nil)
-	_ module.SandboxEnvProvider            = (*Module)(nil)
-	_ module.DatasourceInfoProvider        = (*Module)(nil)
-	_ module.ExamplesProvider              = (*Module)(nil)
-	_ module.PythonAPIDocsProvider         = (*Module)(nil)
-	_ module.GettingStartedSnippetProvider = (*Module)(nil)
+	_ module.Module                 = (*Module)(nil)
+	_ module.DefaultEnabled         = (*Module)(nil)
+	_ module.SandboxEnvProvider     = (*Module)(nil)
+	_ module.DatasourceInfoProvider = (*Module)(nil)
+	_ module.ExamplesProvider       = (*Module)(nil)
+	_ module.PythonAPIDocsProvider  = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for the Block Archive module.
@@ -106,7 +105,7 @@ func (m *Module) Examples() map[string]types.ExampleCategory {
 func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	return map[string]types.ModuleDoc{
 		"block_archive": {
-			Description: "Fetch raw beacon blocks (SSZ or decoded JSON) by (network, slot, block_root) from the public block archive.",
+			Description: "Fetch raw beacon blocks by (network, slot, block_root) from the public block archive; source the (slot, block_root) pairs from clickhouse first. Decoded JSON exists only for networks with a known fork schedule (mainnet/sepolia/hoodi) — for devnets use download_ssz and decode locally. Inactive devnets stay archived; pass active_only=False to list_networks to see them.",
 			Functions: map[string]types.FunctionDoc{
 				"list_networks":  {Signature: "list_networks(active_only=True) -> list[dict]", Description: "List networks the archive knows about. Each entry: {name, description, url (tracoor explorer), type, extra} where extra carries {status, source, chain_id, polling}. Defaults to active+polling networks; pass active_only=False to include inactive devnets that still have historical blocks."},
 				"get_base_url":   {Signature: "get_base_url() -> str", Description: "Get the block-archiver base URL"},
@@ -116,48 +115,6 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 			},
 		},
 	}
-}
-
-func (m *Module) GettingStartedSnippet() string {
-	return `## Block Archive
-
-Fetch raw canonical beacon blocks by (network, slot, block_root). Source the
-(slot, block_root) pairs from clickhouse, then pull the raw payload from the
-archive when you need the SSZ or decoded JSON.
-
-The archive serves mainnet, sepolia, hoodi, plus a rotating set of active
-devnets discovered from cartographoor. Inactive devnets keep their archived
-history available — pass active_only=False to ` + "`list_networks`" + ` to see them.
-
-The decoded-JSON endpoint needs a known fork schedule, which only exists for
-mainnet/sepolia/hoodi. For devnets use ` + "`download_ssz`" + ` and decode locally.
-
-` + "```python" + `
-from ethpandaops import block_archive, clickhouse
-
-# What's the archive currently polling?
-for n in block_archive.list_networks():
-    print(n["name"], n["status"], "polling" if n["polling"] else "")
-
-# Look up a recent block_root for a slot from clickhouse-raw.
-df = clickhouse.query("clickhouse-raw", """
-    SELECT slot, block_root
-    FROM beacon_api_eth_v1_events_block
-    WHERE meta_network_name = 'mainnet'
-    ORDER BY slot DESC
-    LIMIT 1
-""")
-slot = int(df.iloc[0]["slot"])
-root = df.iloc[0]["block_root"]
-
-# Decoded JSON (mainnet/sepolia/hoodi only).
-block = block_archive.get_block_json("mainnet", slot, root)
-print(block["block"]["message"]["proposer_index"])
-
-# Raw SSZ bytes — works for every archived network including devnets.
-raw = block_archive.download_ssz("mainnet", slot, root)
-` + "```" + `
-`
 }
 
 func (m *Module) Start(_ context.Context) error { return nil }

@@ -14,13 +14,14 @@ var clickhouseCmd = &cobra.Command{
 	Short:   "Query ClickHouse databases",
 	Long: `Execute SQL queries against ClickHouse datasources.
 
-Use 'panda search examples "<topic>"' to find dataset-specific query patterns.
-Use 'panda schema' to discover table names, columns, and partition keys.
+Datasource names come from 'panda datasources'; query syntax rules for a
+dataset come from 'panda datasets <name>'. Use 'panda search examples "<topic>"'
+for query patterns and 'panda schema' for table names, columns, and keys.
 
 Examples:
   panda clickhouse list-datasources
-  panda clickhouse query clickhouse-raw "SHOW DATABASES"
-  panda clickhouse query clickhouse-refined "SELECT 1"`,
+  panda clickhouse query-raw <datasource> "SHOW DATABASES"
+  panda clickhouse <datasource> "SELECT 1"`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
@@ -28,7 +29,7 @@ Examples:
 		}
 
 		if len(args) != 2 {
-			return fmt.Errorf("expected <datasource> and <sql>; use 'panda clickhouse query <datasource> <sql>'")
+			return fmt.Errorf("expected <datasource> and <sql>: panda clickhouse <datasource> \"<SQL>\"")
 		}
 
 		return runClickHouseOperation(cmd, "clickhouse.query", args[0], args[1], false)
@@ -64,15 +65,14 @@ var clickhouseQueryCmd = &cobra.Command{
 	Short: "Execute a SQL query",
 	Long: `Execute a SQL query against a ClickHouse datasource.
 
-The datasource name is typically "clickhouse-raw" or "clickhouse-refined". Use 'panda clickhouse list-datasources'
-to see available datasources.
-
-Use 'panda search examples "<topic>"' to find dataset-specific query patterns.
-Use 'panda schema <cluster> <database> <table>' to inspect a table before querying it.
+Datasource names come from 'panda datasources' or 'panda clickhouse list-datasources'.
+Read 'panda datasets <name>' for a dataset's query syntax rules, use
+'panda search examples "<topic>"' for query patterns, and
+'panda schema <cluster> <database> <table>' to inspect a table before querying it.
 
 Examples:
-  panda clickhouse query clickhouse-raw "SHOW DATABASES"
-  panda clickhouse query clickhouse-refined "SELECT 1"`,
+  panda clickhouse query <datasource> "SHOW DATABASES"
+  panda clickhouse query-raw <datasource> "SELECT 1"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runClickHouseOperation(cmd, "clickhouse.query", args[0], args[1], false)
@@ -82,7 +82,13 @@ Examples:
 var clickhouseQueryRawCmd = &cobra.Command{
 	Use:   "query-raw <datasource> <sql>",
 	Short: "Execute a SQL query and return raw rows (always JSON)",
-	Args:  cobra.ExactArgs(2),
+	Long: `Execute a SQL query and return raw rows as JSON.
+
+Keep result sets bounded: aggregate in SQL or add a LIMIT when inspecting rows.
+For cross-source analysis, run separate bounded queries and combine them with
+'panda execute' or another client-side step instead of dumping unbounded rows
+through shell JSON.`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runClickHouseOperation(cmd, "clickhouse.query_raw", args[0], args[1], true)
 	},

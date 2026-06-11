@@ -19,9 +19,11 @@ also available to MCP-connected clients.
 Examples:
   panda resources
   panda resources panda://getting-started
-  panda resources clickhouse://tables
+  panda resources datasets://list
   panda resources read panda://getting-started
+  panda resources read networks://active
   panda resources read python://ethpandaops
+  panda resources read clickhouse://tables/<cluster>/<database>
   panda resources -o json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runResources,
@@ -35,6 +37,7 @@ var resourcesReadCmd = &cobra.Command{
 
 Examples:
   panda resources read panda://getting-started
+  panda resources read networks://active
   panda resources read python://ethpandaops -o json
   panda resources read datasources://clickhouse`,
 	Args: cobra.ExactArgs(1),
@@ -105,6 +108,8 @@ func runResourcesList(cmd *cobra.Command, _ []string) error {
 			fmt.Printf("  %-42s  %s\n", tmpl.URITemplate, desc)
 		}
 	}
+
+	fmt.Println("\nRead a resource: panda resources <uri>")
 
 	return nil
 }

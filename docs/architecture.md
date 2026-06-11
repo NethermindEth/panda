@@ -100,7 +100,7 @@ There is no supported hosted-server product topology in this repo.
 
 ## Module Model
 
-Integrations are called modules and live under `modules/`.
+Integrations are called modules and live under `modules/` (plus the content-only `datasets/` module at the repo root).
 
 Base contract:
 
@@ -117,7 +117,6 @@ Optional capabilities are declared explicitly in `pkg/module/module.go`, for exa
 - datasource metadata
 - examples
 - Python API docs
-- getting-started snippets
 - custom resources
 - proxy-aware startup
 - proxy-discoverable

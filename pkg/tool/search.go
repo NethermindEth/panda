@@ -15,14 +15,17 @@ const SearchToolName = "search"
 
 const searchDescription = `Search indexed examples, runbooks, EIPs, and consensus specs using semantic search.
 
-When ` + "`type`" + ` is omitted, searches across all types and returns combined results. Use a specific type to narrow results.
+When ` + "`type`" + ` is omitted, searches across all types and returns compact combined results. Runbook content is omitted in this mode; use ` + "`type=\"runbooks\"`" + ` when you need a full procedure.
+
+For data queries, use ` + "`type=\"examples\"`" + ` first to get SQL/API snippets without unrelated protocol or runbook results.
+Example results include ` + "`target`" + ` (the datasource to query) and, when applicable, ` + "`dataset`" + ` (the knowledge pack to read for placement or syntax).
 
 ` + "`type=\"examples\"`" + ` for query snippets (SQL, PromQL, LogQL), ` + "`type=\"runbooks\"`" + ` for multi-step investigation procedures, ` + "`type=\"eips\"`" + ` for Ethereum Improvement Proposals, ` + "`type=\"consensus-specs\"`" + ` for consensus-specs documents and protocol constants. ` + "`type=\"notebooks\"`" + ` is accepted as an alias for runbooks, ` + "`type=\"specs\"`" + ` as an alias for consensus-specs.
 
 Examples:
-- search(query="blob propagation getBlobs")
-- search(query="validator performance")
-- search(type="examples", query="block", category="validators")
+- search(query="<topic or error message>")
+- search(type="examples", query="<topic>", category="<category>")
+- search(type="examples", query="<topic>", dataset="<dataset>")
 - search(type="runbooks", query="network not finalizing", tag="finality")
 - search(type="eips", query="account abstraction", status="Final")
 - search(type="consensus-specs", query="MAX_EFFECTIVE_BALANCE")
@@ -56,8 +59,10 @@ func NewSearchTool(
 						"enum": []string{
 							searchsvc.SearchTypeExamples,
 							searchsvc.SearchTypeRunbooks,
+							"notebooks",
 							searchsvc.SearchTypeEIPs,
 							searchsvc.SearchTypeConsensusSpecs,
+							"specs",
 						},
 					},
 					"query": map[string]any{
@@ -67,6 +72,10 @@ func NewSearchTool(
 					"category": map[string]any{
 						"type":        "string",
 						"description": "Optional for type='examples': filter to a specific category (e.g., 'attestations', 'block_events')",
+					},
+					"dataset": map[string]any{
+						"type":        "string",
+						"description": "Optional for type='examples': filter to a specific dataset; valid names come from datasets://list.",
 					},
 					"tag": map[string]any{
 						"type":        "string",
@@ -165,6 +174,7 @@ func (h *searchHandler) searchExamples(
 	response, err := h.service.SearchExamples(
 		query,
 		request.GetString("category", ""),
+		request.GetString("dataset", ""),
 		request.GetInt("limit", searchsvc.DefaultSearchLimit),
 	)
 	if err != nil {
@@ -191,6 +201,10 @@ func (h *searchHandler) searchRunbooks(
 ) (*mcp.CallToolResult, error) {
 	if category := request.GetString("category", ""); category != "" {
 		return CallToolError(fmt.Errorf("category is only supported for type=%q", searchsvc.SearchTypeExamples)), nil
+	}
+
+	if dataset := request.GetString("dataset", ""); dataset != "" {
+		return CallToolError(fmt.Errorf("dataset is only supported for type=%q", searchsvc.SearchTypeExamples)), nil
 	}
 
 	response, err := h.service.SearchRunbooks(
@@ -228,6 +242,10 @@ func (h *searchHandler) searchEIPs(
 		return CallToolError(fmt.Errorf("category is only supported for type=%q", searchsvc.SearchTypeExamples)), nil
 	}
 
+	if dataset := request.GetString("dataset", ""); dataset != "" {
+		return CallToolError(fmt.Errorf("dataset is only supported for type=%q", searchsvc.SearchTypeExamples)), nil
+	}
+
 	response, err := h.service.SearchEIPs(
 		query,
 		request.GetString("status", ""),
@@ -263,6 +281,10 @@ func (h *searchHandler) searchSpecs(
 
 	if category := request.GetString("category", ""); category != "" {
 		return CallToolError(fmt.Errorf("category is only supported for type=%q", searchsvc.SearchTypeExamples)), nil
+	}
+
+	if dataset := request.GetString("dataset", ""); dataset != "" {
+		return CallToolError(fmt.Errorf("dataset is only supported for type=%q", searchsvc.SearchTypeExamples)), nil
 	}
 
 	response, err := h.service.SearchSpecs(

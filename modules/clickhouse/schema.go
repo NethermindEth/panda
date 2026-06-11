@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -73,8 +74,10 @@ type TableSchema struct {
 	Database        string        `json:"database"`
 	Name            string        `json:"name"`
 	Engine          string        `json:"engine,omitempty"`
+	PartitionBy     string        `json:"partition_by,omitempty"`
+	OrderBy         string        `json:"order_by,omitempty"`
+	PrimaryKey      string        `json:"primary_key,omitempty"`
 	Columns         []TableColumn `json:"columns"`
-	HasNetworkCol   bool          `json:"has_network_column"`
 	CreateStatement string        `json:"create_statement,omitempty"`
 	Comment         string        `json:"comment,omitempty"`
 }
@@ -97,6 +100,8 @@ type SchemaClient interface {
 	GetAllTables() map[string]*ClusterTables
 	GetClusterTables(clusterName string) (*ClusterTables, bool)
 	GetTableInCluster(clusterName, database, tableName string) (*TableSchema, bool)
+	FetchTablesInCluster(ctx context.Context, clusterName, database string) (*ClusterTables, error)
+	FetchTableInCluster(ctx context.Context, clusterName, database, tableName string) (*TableSchema, error)
 	UpdateDatasources(datasources []SchemaDiscoveryDatasource)
 }
 
@@ -377,6 +382,107 @@ func (c *clickhouseSchemaClient) GetTableInCluster(clusterName, database, tableN
 	return schema, true
 }
 
+// ErrSchemaClusterNotConfigured is returned when a caller asks for a cluster
+// that is neither cached nor known through datasource discovery.
+var ErrSchemaClusterNotConfigured = errors.New("clickhouse schema cluster is not configured")
+
+// FetchTablesInCluster fetches a lightweight live table listing for one cluster.
+// The returned schemas intentionally contain only table identity; callers should
+// use FetchTableInCluster for full details.
+func (c *clickhouseSchemaClient) FetchTablesInCluster(
+	ctx context.Context,
+	clusterName, database string,
+) (*ClusterTables, error) {
+	datasourceName, ok := c.datasourceForCluster(clusterName)
+	if !ok {
+		return nil, ErrSchemaClusterNotConfigured
+	}
+
+	var (
+		discovered []discoveredTable
+		err        error
+	)
+
+	if strings.TrimSpace(database) != "" {
+		names, listErr := c.fetchTablesFromDatabase(ctx, datasourceName, database)
+		if listErr != nil {
+			return nil, listErr
+		}
+
+		discovered = make([]discoveredTable, 0, len(names))
+		for _, name := range names {
+			discovered = append(discovered, discoveredTable{Name: name, Database: database})
+		}
+	} else {
+		discovered, err = c.fetchTableList(ctx, datasourceName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	cluster := &ClusterTables{
+		ClusterName: clusterName,
+		Tables:      make(map[string]*TableSchema, len(discovered)),
+		LastUpdated: time.Now().UTC(),
+	}
+
+	for _, dt := range discovered {
+		cluster.Tables[tableKey(dt.Database, dt.Name)] = &TableSchema{
+			Database: dt.Database,
+			Name:     dt.Name,
+		}
+	}
+
+	return cluster, nil
+}
+
+// FetchTableInCluster fetches one exact table schema on demand. This keeps the
+// schema resource useful while the background all-table cache is still warming.
+func (c *clickhouseSchemaClient) FetchTableInCluster(ctx context.Context, clusterName, database, tableName string) (*TableSchema, error) {
+	if schema, ok := c.GetTableInCluster(clusterName, database, tableName); ok {
+		return schema, nil
+	}
+
+	datasourceName, ok := c.datasourceForCluster(clusterName)
+	if !ok {
+		return nil, ErrSchemaClusterNotConfigured
+	}
+
+	schema, err := c.fetchTableSchema(ctx, datasourceName, tableName, database)
+	if err != nil {
+		return nil, err
+	}
+
+	schema.Database = database
+
+	if shouldFetchLocalBackingKeys(schema) {
+		localSchema, err := c.fetchLocalBackingTableSchema(ctx, datasourceName, discoveredTable{
+			Name:     tableName,
+			Database: database,
+		})
+		if err != nil {
+			c.log.WithError(err).WithFields(logrus.Fields{
+				"cluster":  clusterName,
+				"database": database,
+				"table":    tableName,
+			}).Debug("Failed to fetch live local backing table key clauses")
+		} else {
+			copyMissingKeyClauses(schema, localSchema)
+		}
+	}
+
+	return schema, nil
+}
+
+func (c *clickhouseSchemaClient) datasourceForCluster(clusterName string) (string, bool) {
+	c.dsMu.RLock()
+	defer c.dsMu.RUnlock()
+
+	datasourceName, ok := c.datasources[clusterName]
+
+	return datasourceName, ok
+}
+
 // backgroundRefresh periodically refreshes the schema data.
 func (c *clickhouseSchemaClient) backgroundRefresh() {
 	defer c.wg.Done()
@@ -514,6 +620,18 @@ func (c *clickhouseSchemaClient) discoverClusterSchema(
 
 			schema.Database = dt.Database
 
+			if shouldFetchLocalBackingKeys(schema) {
+				localSchema, err := c.fetchLocalBackingTableSchema(ctx, datasourceName, dt)
+				if err != nil {
+					c.log.WithError(err).WithFields(logrus.Fields{
+						"database": dt.Database,
+						"table":    dt.Name,
+					}).Debug("Failed to fetch local backing table key clauses")
+				} else {
+					copyMissingKeyClauses(schema, localSchema)
+				}
+			}
+
 			mu.Lock()
 			clusterTables.Tables[tableKey(dt.Database, dt.Name)] = schema
 			mu.Unlock()
@@ -523,6 +641,53 @@ func (c *clickhouseSchemaClient) discoverClusterSchema(
 	wg.Wait()
 
 	return clusterTables, nil
+}
+
+func shouldFetchLocalBackingKeys(schema *TableSchema) bool {
+	if schema == nil || !strings.EqualFold(schema.Engine, "Distributed") {
+		return false
+	}
+
+	return schema.PartitionBy == "" || schema.OrderBy == "" || schema.PrimaryKey == ""
+}
+
+func (c *clickhouseSchemaClient) fetchLocalBackingTableSchema(
+	ctx context.Context,
+	datasourceName string,
+	dt discoveredTable,
+) (*TableSchema, error) {
+	localName, ok := localBackingTableName(dt.Name)
+	if !ok {
+		return nil, fmt.Errorf("table %q has no local backing-table convention", dt.Name)
+	}
+
+	return c.fetchTableSchema(ctx, datasourceName, localName, dt.Database)
+}
+
+func localBackingTableName(tableName string) (string, bool) {
+	if tableName == "" || strings.HasSuffix(tableName, "_local") {
+		return "", false
+	}
+
+	return tableName + "_local", true
+}
+
+func copyMissingKeyClauses(schema, localSchema *TableSchema) {
+	if schema == nil || localSchema == nil {
+		return
+	}
+
+	if schema.PartitionBy == "" {
+		schema.PartitionBy = localSchema.PartitionBy
+	}
+
+	if schema.OrderBy == "" {
+		schema.OrderBy = localSchema.OrderBy
+	}
+
+	if schema.PrimaryKey == "" {
+		schema.PrimaryKey = localSchema.PrimaryKey
+	}
 }
 
 type clickhouseJSONMeta struct {
@@ -597,24 +762,44 @@ func (c *clickhouseSchemaClient) queryJSON(ctx context.Context, datasourceName, 
 	return &result, nil
 }
 
-// fetchTableList fetches the list of tables from a ClickHouse datasource.
-// First tries SHOW TABLES (works for clusters with a default database like clickhouse-raw).
-// If that returns 0 rows, falls back to querying system.tables to discover
-// tables across per-network databases (like clickhouse-refined).
+// fetchTableList discovers tables for a datasource by merging the default
+// database (SHOW TABLES) with every other non-system database. A cluster can
+// hold data in both at once — e.g. a populated default database plus
+// per-dataset databases — so short-circuiting on a non-empty default database
+// would hide the others. Each source failing alone is tolerated; both
+// failing is an error.
 func (c *clickhouseSchemaClient) fetchTableList(ctx context.Context, datasourceName string) ([]discoveredTable, error) {
-	tables, err := c.fetchTableListDefault(ctx, datasourceName)
-	if err != nil {
-		return nil, err
+	defaultTables, defaultErr := c.fetchTableListDefault(ctx, datasourceName)
+	if defaultErr != nil {
+		c.log.WithError(defaultErr).WithField("datasource", datasourceName).
+			Warn("Default-database table discovery failed")
 	}
 
-	if len(tables) > 0 {
-		return tables, nil
+	databaseTables, databasesErr := c.fetchTableListFromSystemTables(ctx, datasourceName)
+	if databasesErr != nil {
+		c.log.WithError(databasesErr).WithField("datasource", datasourceName).
+			Warn("Per-database table discovery failed")
 	}
 
-	// Default database is empty — try per-network-database discovery.
-	c.log.WithField("datasource", datasourceName).Info("SHOW TABLES returned 0 rows, trying per-database discovery fallback")
+	if defaultErr != nil && databasesErr != nil {
+		return nil, fmt.Errorf("discovering tables: %w", errors.Join(defaultErr, databasesErr))
+	}
 
-	return c.fetchTableListFromSystemTables(ctx, datasourceName)
+	seen := make(map[string]bool, len(defaultTables)+len(databaseTables))
+	merged := make([]discoveredTable, 0, len(defaultTables)+len(databaseTables))
+
+	for _, t := range append(defaultTables, databaseTables...) {
+		key := t.Database + "\x00" + t.Name
+		if seen[key] {
+			continue
+		}
+
+		seen[key] = true
+
+		merged = append(merged, t)
+	}
+
+	return merged, nil
 }
 
 // fetchTableListDefault fetches tables from the cluster's default database via
@@ -669,8 +854,7 @@ var systemDatabaseBlacklist = map[string]bool{
 }
 
 // fetchTableListFromSystemTables emits one discoveredTable per (database, table)
-// for every non-system database. Used when the cluster's default database is
-// empty (clickhouse-refined, observability tier-scoped clusters).
+// for every non-system database. Used when the cluster has no default database.
 func (c *clickhouseSchemaClient) fetchTableListFromSystemTables(ctx context.Context, datasourceName string) ([]discoveredTable, error) {
 	databases, err := c.fetchDatabases(ctx, datasourceName)
 	if err != nil {
@@ -865,6 +1049,10 @@ outerLoop:
 		schema.Comment = matches[1]
 	}
 
+	schema.PartitionBy = extractCreateClause(suffix, "PARTITION BY")
+	schema.OrderBy = extractCreateClause(suffix, "ORDER BY")
+	schema.PrimaryKey = extractCreateClause(suffix, "PRIMARY KEY")
+
 	// Parse each column definition.
 	// Column format: `name` Type [DEFAULT expr] [CODEC(...)] [COMMENT 'comment'].
 
@@ -900,15 +1088,139 @@ outerLoop:
 			col.DefaultValue = strings.TrimSpace(defaultMatches[2])
 		}
 
-		// Check for meta_network_name column.
-		if col.Name == "meta_network_name" {
-			schema.HasNetworkCol = true
-		}
-
 		schema.Columns = append(schema.Columns, col)
 	}
 
 	return schema, nil
+}
+
+var createClauseStopKeywords = []string{
+	"PARTITION BY",
+	"PRIMARY KEY",
+	"ORDER BY",
+	"SAMPLE BY",
+	"TTL",
+	"SETTINGS",
+	"COMMENT",
+}
+
+func extractCreateClause(s, keyword string) string {
+	_, keywordEnd, ok := findTopLevelKeyword(s, keyword, 0)
+	if !ok {
+		return ""
+	}
+
+	start := skipSpaces(s, keywordEnd)
+	end := len(s)
+
+	for _, stop := range createClauseStopKeywords {
+		if strings.EqualFold(stop, keyword) {
+			continue
+		}
+
+		stopStart, _, found := findTopLevelKeyword(s, stop, start)
+		if found && stopStart < end {
+			end = stopStart
+		}
+	}
+
+	expr := strings.TrimSpace(s[start:end])
+	expr = strings.TrimSuffix(expr, ";")
+	expr = strings.TrimSuffix(strings.TrimSpace(expr), ",")
+
+	return strings.TrimSpace(expr)
+}
+
+func findTopLevelKeyword(s, keyword string, from int) (int, int, bool) {
+	depth := 0
+	quoted := byte(0)
+
+	for i := max(from, 0); i < len(s); i++ {
+		ch := s[i]
+
+		if quoted != 0 {
+			if ch == '\\' && i+1 < len(s) {
+				i++
+
+				continue
+			}
+
+			if ch == quoted {
+				quoted = 0
+			}
+
+			continue
+		}
+
+		switch ch {
+		case '\'', '"', '`':
+			quoted = ch
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if depth == 0 {
+				if end, ok := matchKeywordAt(s, i, keyword); ok {
+					return i, end, true
+				}
+			}
+		}
+	}
+
+	return 0, 0, false
+}
+
+func matchKeywordAt(s string, pos int, keyword string) (int, bool) {
+	if pos > 0 && isIdentifierByte(s[pos-1]) {
+		return 0, false
+	}
+
+	parts := strings.Fields(keyword)
+	cur := pos
+
+	for i, part := range parts {
+		if i > 0 {
+			if cur >= len(s) || !isSpaceByte(s[cur]) {
+				return 0, false
+			}
+
+			cur = skipSpaces(s, cur)
+		}
+
+		if cur+len(part) > len(s) || !strings.EqualFold(s[cur:cur+len(part)], part) {
+			return 0, false
+		}
+
+		cur += len(part)
+	}
+
+	if cur < len(s) && isIdentifierByte(s[cur]) {
+		return 0, false
+	}
+
+	return cur, true
+}
+
+func skipSpaces(s string, pos int) int {
+	for pos < len(s) && isSpaceByte(s[pos]) {
+		pos++
+	}
+
+	return pos
+}
+
+func isSpaceByte(ch byte) bool {
+	return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t'
+}
+
+func isIdentifierByte(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_'
 }
 
 // cleanColumnType removes trailing clauses from the column type.

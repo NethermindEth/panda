@@ -96,7 +96,7 @@ uv run python -m scripts.repl
 
 ### Module System
 
-Seven compiled-in modules are registered in `pkg/app/app.go`:
+Eight compiled-in modules are registered in `pkg/app/app.go`:
 - `clickhouse`
 - `prometheus`
 - `loki`
@@ -104,13 +104,14 @@ Seven compiled-in modules are registered in `pkg/app/app.go`:
 - `ethnode`
 - `cbt`
 - `block_archive`
+- `datasets` (dataset knowledge packs, lives in `datasets/` at the repo root)
 
 Each module implements `module.Module` in `pkg/module/module.go`. Optional capability interfaces live alongside it in `pkg/module/module.go`.
 - `ProxyAware` — receives proxy client for proxy-backed operations
 - `ProxyDiscoverable` — initializes from discovered datasources
 - `CartographoorAware` — receives network discovery client
 - `DefaultEnabled` — activates without explicit config (e.g., dora)
-- provider interfaces such as sandbox env, datasource info, examples, Python docs, getting-started snippets, and resources are optional and capability-based
+- provider interfaces such as sandbox env, datasource info, examples, Python docs, and resources are optional and capability-based
 
 Datasource identity is owned by the proxy that advertised it. Modules that implement `ProxyDiscoverable` initialize from discovered datasources. The proxy client refreshes datasource info every 60 seconds by default (the embedded local proxy polls every 5 seconds).
 
@@ -125,7 +126,8 @@ Datasource identity is owned by the proxy that advertised it. Modules that imple
 7. Semantic search runtime
 8. MCP tool registry: `execute_python`, `manage_session`, `search`
 9. MCP resource registry
-10. Product HTTP API
+10. Background discovery refresh armed (module activation/resource registration for datasources that appear later; inert during build)
+11. Product HTTP API
 
 ### Public Surfaces
 
@@ -142,6 +144,7 @@ CLI commands and groups include:
 - `build` (GitHub Actions Docker image builder)
 - `clickhouse`
 - `config`
+- `datasets`
 - `datasources`
 - `docs`
 - `dora`
@@ -238,6 +241,7 @@ pkg/
   config/          # Configuration loading and validation
   observability/   # Prometheus metrics
   types/           # Shared data types
+datasets/          # Dataset knowledge packs (content-only module)
 modules/
   clickhouse/      # ClickHouse module
   prometheus/      # Prometheus module

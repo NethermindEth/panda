@@ -3,8 +3,10 @@ package resource
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ethpandaops/cartographoor/pkg/discovery"
@@ -19,10 +21,11 @@ var networkURIPattern = regexp.MustCompile(`^networks://(.+)$`)
 
 // NetworkSummary is a compact representation for the active networks list.
 type NetworkSummary struct {
-	Name     string   `json:"name"`
-	ChainID  uint64   `json:"chain_id,omitempty"`
-	Clusters []string `json:"clusters"`
-	Status   string   `json:"status"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ChainID     uint64 `json:"chain_id,omitempty"`
+	Status      string `json:"status"`
+	ResourceURI string `json:"resource_uri"`
 }
 
 // NetworksActiveResponse is the response for networks://active.
@@ -32,27 +35,25 @@ type NetworksActiveResponse struct {
 	Usage    string           `json:"usage"`
 }
 
-// NetworkWithClusters wraps a discovery.Network with clickhouse cluster info.
-type NetworkWithClusters struct {
-	discovery.Network
-	Clusters []string `json:"clusters"`
-}
-
 // NetworksAllResponse is the response for networks://all.
 type NetworksAllResponse struct {
-	Networks map[string]NetworkWithClusters `json:"networks"`
-	Groups   []string                       `json:"groups"`
+	Networks map[string]discovery.Network `json:"networks"`
+	Groups   []string                     `json:"groups"`
 }
 
 // NetworkDetailResponse is the response for networks://{name} (single network).
 type NetworkDetailResponse struct {
-	Network NetworkWithClusters `json:"network"`
+	ID               string            `json:"id"`
+	ResourceURI      string            `json:"resource_uri"`
+	NodeInventoryURL string            `json:"node_inventory_url,omitempty"`
+	Usage            string            `json:"usage,omitempty"`
+	Network          discovery.Network `json:"network"`
 }
 
 // GroupDetailResponse is the response for networks://{group} (devnet group).
 type GroupDetailResponse struct {
-	Group    string                         `json:"group"`
-	Networks map[string]NetworkWithClusters `json:"networks"`
+	Group    string                       `json:"group"`
+	Networks map[string]discovery.Network `json:"networks"`
 }
 
 // RegisterNetworksResources registers all network-related resources with the registry.
@@ -107,19 +108,24 @@ func createActiveNetworksHandler(client cartographoor.CartographoorClient) ReadH
 
 		summaries := make([]NetworkSummary, 0, len(networks))
 
-		for _, network := range networks {
+		for id, network := range networks {
 			summaries = append(summaries, NetworkSummary{
-				Name:     network.Name,
-				ChainID:  network.ChainID,
-				Clusters: client.GetClusters(network),
-				Status:   network.Status,
+				ID:          id,
+				Name:        network.Name,
+				ChainID:     network.ChainID,
+				Status:      network.Status,
+				ResourceURI: "networks://" + id,
 			})
 		}
+
+		sort.Slice(summaries, func(i, j int) bool {
+			return summaries[i].ID < summaries[j].ID
+		})
 
 		response := NetworksActiveResponse{
 			Networks: summaries,
 			Groups:   groups,
-			Usage:    "Use networks://{name} for full network details or networks://{group} for all networks in a devnet group",
+			Usage:    "Use each network's resource_uri, or networks://{id}, for full network details. The name field is a display label and may be short or duplicated. Use networks://{group} for all networks in a devnet group.",
 		}
 
 		data, err := json.MarshalIndent(response, "", "  ")
@@ -134,21 +140,9 @@ func createActiveNetworksHandler(client cartographoor.CartographoorClient) ReadH
 // createAllNetworksHandler returns a handler for networks://all.
 func createAllNetworksHandler(client cartographoor.CartographoorClient) ReadHandler {
 	return func(_ context.Context, _ string) (string, error) {
-		networks := client.GetAllNetworks()
-		groups := client.GetGroups()
-
-		networksWithClusters := make(map[string]NetworkWithClusters, len(networks))
-
-		for name, network := range networks {
-			networksWithClusters[name] = NetworkWithClusters{
-				Network:  network,
-				Clusters: client.GetClusters(network),
-			}
-		}
-
 		response := NetworksAllResponse{
-			Networks: networksWithClusters,
-			Groups:   groups,
+			Networks: client.GetAllNetworks(),
+			Groups:   client.GetGroups(),
 		}
 
 		data, err := json.MarshalIndent(response, "", "  ")
@@ -172,14 +166,14 @@ func createNetworkDetailHandler(log logrus.FieldLogger, client cartographoor.Car
 
 		// Try exact network match first
 		if network, ok := client.GetNetwork(name); ok {
-			response := NetworkDetailResponse{
-				Network: NetworkWithClusters{
-					Network:  network,
-					Clusters: client.GetClusters(network),
-				},
-			}
-
-			data, err := json.MarshalIndent(response, "", "  ")
+			inventoryURL := networkNodeInventoryURL(network)
+			data, err := json.MarshalIndent(NetworkDetailResponse{
+				ID:               name,
+				ResourceURI:      "networks://" + name,
+				NodeInventoryURL: inventoryURL,
+				Usage:            networkDetailUsage(inventoryURL),
+				Network:          network,
+			}, "", "  ")
 			if err != nil {
 				return "", fmt.Errorf("marshaling response: %w", err)
 			}
@@ -189,18 +183,9 @@ func createNetworkDetailHandler(log logrus.FieldLogger, client cartographoor.Car
 
 		// Try group match
 		if networks, ok := client.GetGroup(name); ok {
-			networksWithClusters := make(map[string]NetworkWithClusters, len(networks))
-
-			for netName, network := range networks {
-				networksWithClusters[netName] = NetworkWithClusters{
-					Network:  network,
-					Clusters: client.GetClusters(network),
-				}
-			}
-
 			response := GroupDetailResponse{
 				Group:    name,
-				Networks: networksWithClusters,
+				Networks: networks,
 			}
 
 			data, err := json.MarshalIndent(response, "", "  ")
@@ -219,6 +204,9 @@ func createNetworkDetailHandler(log logrus.FieldLogger, client cartographoor.Car
 		for netName := range allNetworks {
 			networkNames = append(networkNames, netName)
 		}
+		sort.Strings(networkNames)
+
+		matchingDisplayNames := matchingNetworkIDsByDisplayName(allNetworks, name)
 
 		log.WithFields(logrus.Fields{
 			"requested": name,
@@ -226,10 +214,52 @@ func createNetworkDetailHandler(log logrus.FieldLogger, client cartographoor.Car
 			"groups":    len(groups),
 		}).Debug("Network or group not found")
 
-		return "", fmt.Errorf(
-			"network or group %q not found. Available groups: %s",
-			name,
-			strings.Join(groups, ", "),
-		)
+		message := fmt.Sprintf("network or group %q not found", name)
+		if len(matchingDisplayNames) > 0 {
+			message += fmt.Sprintf(". Matching display name; use full network id: %s", strings.Join(matchingDisplayNames, ", "))
+		}
+		if len(groups) > 0 {
+			message += fmt.Sprintf(". Available groups: %s", strings.Join(groups, ", "))
+		}
+
+		message += ". Read networks://active to list current ids."
+
+		return "", errors.New(message)
 	}
+}
+
+func networkNodeInventoryURL(network discovery.Network) string {
+	if network.GenesisConfig == nil {
+		return ""
+	}
+
+	for _, cfg := range network.GenesisConfig.API {
+		if strings.Contains(cfg.Path, "/nodes/inventory") || strings.Contains(cfg.URL, "/nodes/inventory") {
+			return cfg.URL
+		}
+	}
+
+	return ""
+}
+
+func networkDetailUsage(inventoryURL string) string {
+	if inventoryURL == "" {
+		return "Use networks://active for current network ids. This network does not advertise a node inventory URL."
+	}
+
+	return "Use node_inventory_url to discover node instance labels for direct node API calls."
+}
+
+func matchingNetworkIDsByDisplayName(networks map[string]discovery.Network, displayName string) []string {
+	var matches []string
+
+	for id, network := range networks {
+		if network.Name == displayName {
+			matches = append(matches, id)
+		}
+	}
+
+	sort.Strings(matches)
+
+	return matches
 }

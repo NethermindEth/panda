@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -17,16 +16,14 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ module.Module                        = (*Module)(nil)
-	_ module.ProxyDiscoverable             = (*Module)(nil)
-	_ module.DiscoveryReloadable           = (*Module)(nil)
-	_ module.ProxyAware                    = (*Module)(nil)
-	_ module.ResourceProvider              = (*Module)(nil)
-	_ module.SandboxEnvProvider            = (*Module)(nil)
-	_ module.DatasourceInfoProvider        = (*Module)(nil)
-	_ module.ExamplesProvider              = (*Module)(nil)
-	_ module.PythonAPIDocsProvider         = (*Module)(nil)
-	_ module.GettingStartedSnippetProvider = (*Module)(nil)
+	_ module.Module                 = (*Module)(nil)
+	_ module.ProxyDiscoverable      = (*Module)(nil)
+	_ module.DiscoveryReloadable    = (*Module)(nil)
+	_ module.ProxyAware             = (*Module)(nil)
+	_ module.ResourceProvider       = (*Module)(nil)
+	_ module.SandboxEnvProvider     = (*Module)(nil)
+	_ module.DatasourceInfoProvider = (*Module)(nil)
+	_ module.PythonAPIDocsProvider  = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for ClickHouse.
@@ -45,6 +42,16 @@ func New() *Module {
 }
 
 func (m *Module) Name() string { return "clickhouse" }
+
+// getSchemaClient returns the schema client under the lock: Start can run on
+// the discovery-refresh goroutine (late activation) concurrently with readers
+// on the main goroutine.
+func (m *Module) getSchemaClient() SchemaClient {
+	m.dsMu.RLock()
+	defer m.dsMu.RUnlock()
+
+	return m.schemaClient
+}
 
 // SetProxyClient injects the proxy service for schema discovery.
 func (m *Module) SetProxyClient(client proxy.Service) {
@@ -87,7 +94,8 @@ func (m *Module) InitFromDiscovery(datasources []types.DatasourceInfo) error {
 // fetched without a server restart. Skipped when YAML schema_discovery.datasources
 // is configured (those are authoritative) or when schema discovery is disabled.
 func (m *Module) OnDiscoveryReloaded(_ context.Context) error {
-	if m.schemaClient == nil {
+	schemaClient := m.getSchemaClient()
+	if schemaClient == nil {
 		return nil
 	}
 
@@ -111,7 +119,7 @@ func (m *Module) OnDiscoveryReloaded(_ context.Context) error {
 	}
 	m.dsMu.RUnlock()
 
-	m.schemaClient.UpdateDatasources(dsList)
+	schemaClient.UpdateDatasources(dsList)
 
 	return nil
 }
@@ -140,6 +148,7 @@ func (m *Module) ApplyDefaults() {
 	if m.cfg.SchemaDiscovery.RefreshInterval == 0 {
 		m.cfg.SchemaDiscovery.RefreshInterval = DefaultSchemaRefreshInterval
 	}
+
 }
 
 // Validate checks that the parsed config is valid.
@@ -169,18 +178,31 @@ func (m *Module) SandboxEnv() (map[string]string, error) {
 		return nil, nil
 	}
 
+	type datasetInfo struct {
+		Dataset string            `json:"dataset"`
+		Params  map[string]string `json:"params,omitempty"`
+		Notes   string            `json:"notes,omitempty"`
+	}
+
 	type datasourceInfo struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Database    string `json:"database"`
+		Name        string        `json:"name"`
+		Description string        `json:"description"`
+		Database    string        `json:"database"`
+		Datasets    []datasetInfo `json:"datasets,omitempty"`
 	}
 
 	infos := make([]datasourceInfo, 0, len(m.datasources))
 	for _, ds := range m.datasources {
+		var datasets []datasetInfo
+		for _, b := range ds.Contents {
+			datasets = append(datasets, datasetInfo{Dataset: b.Dataset, Params: b.Params, Notes: b.Notes})
+		}
+
 		infos = append(infos, datasourceInfo{
 			Name:        ds.Name,
 			Description: ds.Description,
 			Database:    ds.Metadata["database"],
+			Datasets:    datasets,
 		})
 	}
 
@@ -205,40 +227,34 @@ func (m *Module) DatasourceInfo() []types.DatasourceInfo {
 	return result
 }
 
-// Examples returns query examples for the ClickHouse module.
-func (m *Module) Examples() map[string]types.ExampleCategory {
-	result := make(map[string]types.ExampleCategory, len(queryExamples))
-	maps.Copy(result, queryExamples)
-
-	return result
-}
-
-// PythonAPIDocs returns the ClickHouse module documentation.
+// PythonAPIDocs returns the ClickHouse module documentation. It describes the
+// generic transport only; dataset-specific guidance (table syntax, conventions)
+// lives in the dataset knowledge packs surfaced via search and datasets://{name}.
 func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	return map[string]types.ModuleDoc{
 		"clickhouse": {
-			Description: "Query ClickHouse databases for Ethereum blockchain data. Use the search tool for query patterns and investigation procedures.",
+			Description: "Execute SQL against a discovered ClickHouse datasource. Use the search tool for query examples and read datasources://clickhouse for available datasources.",
 			Functions: map[string]types.FunctionDoc{
 				"list_datasources": {
 					Signature:   "clickhouse.list_datasources() -> list[dict]",
 					Description: "List available ClickHouse datasources. Prefer datasources://clickhouse resource instead.",
-					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys ('extra.database' holds the default database)",
+					Returns:     "List of dicts with 'name', 'description', 'url', 'type', 'extra' keys ('extra.database' holds the default database; 'extra.datasets' lists dataset bindings with 'dataset', 'params', 'notes')",
 				},
 				"query": {
 					Signature:   "clickhouse.query(datasource: str, sql: str, parameters: dict | None = None) -> pandas.DataFrame",
-					Description: "Execute SQL query, return DataFrame",
+					Description: "Execute SQL query and materialize the result as a DataFrame. Keep results bounded with SQL filters, aggregation, or LIMIT before loading them into Python.",
 					Parameters: map[string]string{
-						"datasource": "'clickhouse-raw' or 'clickhouse-refined' - see panda://getting-started for syntax differences",
-						"sql":        "SQL query string",
+						"datasource": "a ClickHouse datasource name from clickhouse.list_datasources() or datasources://clickhouse",
+						"sql":        "SQL query string; reference tables as database.table and inspect schemas via clickhouse://tables/{cluster}/{database}",
 						"parameters": "Optional ClickHouse query parameters referenced in SQL as {name:Type}",
 					},
 					Returns: "pandas.DataFrame",
 				},
 				"query_raw": {
 					Signature:   "clickhouse.query_raw(datasource: str, sql: str, parameters: dict | None = None) -> tuple[list[tuple], list[str]]",
-					Description: "Execute SQL query, return raw tuples",
+					Description: "Execute SQL query and materialize raw rows plus column names. Prefer aggregation or LIMIT for row inspection; avoid pulling unbounded tables into the sandbox.",
 					Parameters: map[string]string{
-						"datasource": "'clickhouse-raw' or 'clickhouse-refined'",
+						"datasource": "a ClickHouse datasource name from clickhouse.list_datasources() or datasources://clickhouse",
 						"sql":        "SQL query string",
 						"parameters": "Optional ClickHouse query parameters referenced in SQL as {name:Type}",
 					},
@@ -249,36 +265,11 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 	}
 }
 
-// GettingStartedSnippet returns ClickHouse-specific getting-started content.
-func (m *Module) GettingStartedSnippet() string {
-	return `## ClickHouse Datasource Rules
-
-Xatu data is split across **TWO datasources** with **DIFFERENT syntax**:
-
-| Datasource | Contains | Table Syntax | Network Filter |
-|------------|----------|--------------|----------------|
-| **clickhouse-raw** | Raw events | FROM <database>.<table> | Filter on the table's network column when present |
-| **clickhouse-refined** | Pre-aggregated | FROM <network>.<table> | Network database prefix IS the filter |
-
-Use panda search examples "<topic>" for dataset-specific query patterns and
-panda schema <cluster> <database> <table> for columns, comments, and keys.
-
-**Always filter by the table's partition key** to avoid timeouts. Inspect the
-table schema when you are not sure which column is the partition key.
-
-## Canonical vs Head Data
-
-- **Canonical/finalized** data is appropriate for historical analysis.
-- **Head/latest** data is appropriate for real-time monitoring and may reorg.
-- Use examples and schema comments to choose the table variant for the task.
-`
-}
-
 // RegisterResources registers ClickHouse schema resources.
 func (m *Module) RegisterResources(log logrus.FieldLogger, reg module.ResourceRegistry) error {
 	m.log = log.WithField("module", "clickhouse")
-	if m.schemaClient != nil {
-		RegisterSchemaResources(m.log, reg, m.schemaClient)
+	if schemaClient := m.getSchemaClient(); schemaClient != nil {
+		RegisterSchemaResources(m.log, reg, schemaClient)
 	}
 
 	return nil
@@ -332,7 +323,7 @@ func (m *Module) Start(ctx context.Context) error {
 		return nil
 	}
 
-	m.schemaClient = NewSchemaClient(
+	schemaClient := NewSchemaClient(
 		m.log,
 		SchemaConfig{
 			RefreshInterval: m.cfg.SchemaDiscovery.RefreshInterval,
@@ -342,13 +333,17 @@ func (m *Module) Start(ctx context.Context) error {
 		m.proxySvc,
 	)
 
-	return m.schemaClient.Start(ctx)
+	m.dsMu.Lock()
+	m.schemaClient = schemaClient
+	m.dsMu.Unlock()
+
+	return schemaClient.Start(ctx)
 }
 
 // Stop cleans up resources.
 func (m *Module) Stop(_ context.Context) error {
-	if m.schemaClient != nil {
-		return m.schemaClient.Stop()
+	if schemaClient := m.getSchemaClient(); schemaClient != nil {
+		return schemaClient.Stop()
 	}
 
 	return nil

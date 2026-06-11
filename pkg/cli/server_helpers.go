@@ -18,6 +18,7 @@ import (
 	"github.com/ethpandaops/panda/pkg/config"
 	"github.com/ethpandaops/panda/pkg/operations"
 	"github.com/ethpandaops/panda/pkg/serverapi"
+	"github.com/ethpandaops/panda/pkg/types"
 )
 
 var serverHTTP = &http.Client{Timeout: 0}
@@ -247,10 +248,13 @@ func destroySession(ctx context.Context, sessionID string) error {
 	return serverDelete(ctx, "/api/v1/sessions/"+url.PathEscape(sessionID))
 }
 
-func searchExamples(ctx context.Context, queryText, category string, limit int) (*serverapi.SearchExamplesResponse, error) {
+func searchExamples(ctx context.Context, queryText, category, dataset string, limit int) (*serverapi.SearchExamplesResponse, error) {
 	query := url.Values{"query": []string{queryText}}
 	if category != "" {
 		query.Set("category", category)
+	}
+	if dataset != "" {
+		query.Set("dataset", dataset)
 	}
 	if limit > 0 {
 		query.Set("limit", fmt.Sprintf("%d", limit))
@@ -345,7 +349,7 @@ func listResources(ctx context.Context) (*serverapi.ListResourcesResponse, error
 }
 
 func readResource(ctx context.Context, uri string) (*serverapi.ResourceResponse, error) {
-	return readResourceWithClientContext(ctx, uri, "")
+	return readResourceWithClientContext(ctx, uri, types.ClientContextCLIParam)
 }
 
 func readResourceWithClientContext(ctx context.Context, uri, clientContext string) (*serverapi.ResourceResponse, error) {
@@ -370,14 +374,16 @@ func readResourceWithClientContext(ctx context.Context, uri, clientContext strin
 	}, nil
 }
 
-// readClickHouseTables lists every cluster and its tables.
-func readClickHouseTables(ctx context.Context) (*clickhousemodule.TablesListResponse, error) {
-	return readClickHouseTablesURI(ctx, "clickhouse://tables")
-}
+// readClickHouseClusterTables reads the cluster-level schema resource. The
+// default response is compact; includeTables opts into the full table list for
+// table-name searches and shell completion.
+func readClickHouseClusterTables(ctx context.Context, cluster string, includeTables bool) (*clickhousemodule.TablesListResponse, error) {
+	uri := "clickhouse://tables/" + cluster
+	if includeTables {
+		uri += "?include=tables"
+	}
 
-// readClickHouseClusterTables lists the tables in a single cluster.
-func readClickHouseClusterTables(ctx context.Context, cluster string) (*clickhousemodule.TablesListResponse, error) {
-	return readClickHouseTablesURI(ctx, "clickhouse://tables/"+cluster)
+	return readClickHouseTablesURI(ctx, uri)
 }
 
 // readClickHouseDatabaseTables lists the tables in a single database of a cluster.
@@ -454,10 +460,60 @@ func decodeAPIError(status int, data []byte) error {
 	return fmt.Errorf("HTTP %d: %s", status, message)
 }
 
-func serverErrorHint(status int, _ string) string {
+func serverErrorHint(status int, message string) string {
+	// Error classification is the ClickHouse module's knowledge; the CLI only
+	// owns the command-idiom wording per class.
+	switch clickhousemodule.ClassifyQueryError(message) {
+	case clickhousemodule.QueryErrorPrimaryKeyFilterRequired:
+		return "ClickHouse requires a query shape that can use the table's primary-key/order-key columns; inspect key clauses with 'panda schema <cluster> <database> <table>' and add selective WHERE filters on those keys. Partition filters help bound work but may not satisfy force_primary_key. Do not disable force_primary_key on an unbounded scan; only append 'SETTINGS force_primary_key=0' when the query is otherwise tightly bounded and you can explain why the key cannot be used"
+	case clickhousemodule.QueryErrorUnknownIdentifier:
+		return "the SQL references a column or expression that is not available in the selected table; inspect the table with 'panda schema <cluster> <database> <table>' and adjust the SELECT, WHERE, and GROUP BY clauses"
+	case clickhousemodule.QueryErrorNotAggregate:
+		return "ClickHouse requires every selected expression to be aggregated or included in GROUP BY; update the SELECT/GROUP BY clauses or inspect examples with 'panda search examples <topic>'"
+	case clickhousemodule.QueryErrorSyntax:
+		return "ClickHouse rejected the SQL syntax; confirm dataset syntax with 'panda datasets <name>' and table shape with 'panda schema <cluster> <database> <table>'. For FINAL with aliases, use 'FROM table AS alias FINAL' or wrap the FINAL read in a subquery"
+	case clickhousemodule.QueryErrorDatasourceNotFound:
+		return "the first ClickHouse argument must be a datasource/cluster name; list them with 'panda datasources --type clickhouse' or 'panda clickhouse list-datasources'"
+	case clickhousemodule.QueryErrorDistributedJoinDenied:
+		return "ClickHouse denied a distributed subquery or join; filter each side before joining, use GLOBAL/ANY JOIN when appropriate for distributed tables, or resolve the small side first and pass literal filter values into the next query"
+	case clickhousemodule.QueryErrorUnknownTable:
+		return "the SQL references a table or database that is not available in the selected ClickHouse datasource; list datasources with 'panda datasources --type clickhouse' and inspect tables with 'panda schema <cluster> [database]'"
+	case clickhousemodule.QueryErrorUnknownFunction:
+		return "the SQL uses a ClickHouse function unavailable in this deployment/version; replace it with a supported function or simplify the expression, then rerun the query"
+	case clickhousemodule.QueryErrorBadFunctionArguments:
+		return "a SQL function received an incompatible argument type or shape; inspect column types with 'panda schema <cluster> <database> <table>' and cast deliberately where needed"
+	case clickhousemodule.QueryErrorIllegalAggregation:
+		return "ClickHouse does not allow aggregate functions nested inside other aggregate functions; compute the inner aggregate in one step, then materialize or simplify before applying an outer aggregate"
+	case clickhousemodule.QueryErrorAliasRequired:
+		return "ClickHouse requires explicit aliases for subqueries used in JOIN/CROSS JOIN contexts; add 'AS <alias>' to each subquery or table expression"
+	case clickhousemodule.QueryErrorUnknown:
+	}
+
+	normalized := strings.ToLower(message)
+	if strings.Contains(normalized, "clickhouse://tables/") &&
+		strings.Contains(normalized, "invalid identifier") {
+		return "schema resource paths use concrete ClickHouse identifiers in /<cluster>/<database>/<table>; dataset names, placeholders, and SQL clauses are not identifiers. Read 'panda datasets <name>' for placement/syntax, then substitute concrete names"
+	}
+
+	if strings.Contains(normalized, "clickhouse://tables/") &&
+		strings.Contains(normalized, "cluster ") &&
+		strings.Contains(normalized, "not found") {
+		return "schema expects a ClickHouse datasource/cluster name, not a dataset name; list clusters with 'panda datasources --type clickhouse'. If starting from an example, use its Target and read 'panda datasets <name>' for placement/syntax"
+	}
+
+	if strings.Contains(normalized, "unknown dataset") {
+		return "datasets are knowledge-pack IDs, not datasource names; list valid datasets with 'panda datasets'. Use 'panda datasources' for datasource names and 'panda schema <cluster>' for ClickHouse table discovery"
+	}
+
+	if strings.Contains(normalized, "prometheus datasource") && strings.Contains(normalized, "not found") {
+		return "the first Prometheus argument must be a live datasource name; list them with 'panda prometheus list-datasources' or 'panda datasources --type prometheus'"
+	}
+
 	switch status {
 	case http.StatusNotFound:
 		return "the requested module, operation, datasource, or resource is not available on this server; check 'panda datasources' and 'panda resources'"
+	case http.StatusBadGateway:
+		return "an upstream datasource or node returned a gateway error; the target may be temporarily unreachable — retry, or confirm it is still advertised with 'panda datasources'"
 	case http.StatusServiceUnavailable:
 		return "the server is running but a required service (e.g. sandbox) is not available — check server logs with 'docker compose logs server'"
 	default:

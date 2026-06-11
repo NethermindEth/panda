@@ -117,21 +117,21 @@ func completeSchemaArgs(cmd *cobra.Command, args []string, _ string) ([]string, 
 }
 
 func completeClusterNames(ctx context.Context) ([]string, cobra.ShellCompDirective) {
-	response, err := readClickHouseTables(ctx)
+	response, err := listDatasources(ctx, "clickhouse")
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	names := make([]string, 0, len(response.Clusters))
-	for clusterName := range response.Clusters {
-		names = append(names, clusterName)
+	names := make([]string, 0, len(response.Datasources))
+	for _, info := range response.Datasources {
+		names = append(names, info.Name)
 	}
 
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 func completeDatabaseNames(ctx context.Context, cluster string) ([]string, cobra.ShellCompDirective) {
-	response, err := readClickHouseClusterTables(ctx, cluster)
+	response, err := readClickHouseClusterTables(ctx, cluster, false)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -141,6 +141,23 @@ func completeDatabaseNames(ctx context.Context, cluster string) ([]string, cobra
 	var names []string
 
 	for _, c := range response.Clusters {
+		if c == nil {
+			continue
+		}
+
+		for _, database := range c.Databases {
+			if database == nil {
+				continue
+			}
+
+			if _, ok := seen[database.Name]; ok {
+				continue
+			}
+
+			seen[database.Name] = struct{}{}
+			names = append(names, database.Name)
+		}
+
 		for _, table := range c.Tables {
 			if _, ok := seen[table.Database]; ok {
 				continue

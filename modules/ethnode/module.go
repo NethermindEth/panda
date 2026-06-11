@@ -11,13 +11,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ module.Module                        = (*Module)(nil)
-	_ module.ProxyDiscoverable             = (*Module)(nil)
-	_ module.SandboxEnvProvider            = (*Module)(nil)
-	_ module.DatasourceInfoProvider        = (*Module)(nil)
-	_ module.ExamplesProvider              = (*Module)(nil)
-	_ module.PythonAPIDocsProvider         = (*Module)(nil)
-	_ module.GettingStartedSnippetProvider = (*Module)(nil)
+	_ module.Module                 = (*Module)(nil)
+	_ module.ProxyDiscoverable      = (*Module)(nil)
+	_ module.SandboxEnvProvider     = (*Module)(nil)
+	_ module.DatasourceInfoProvider = (*Module)(nil)
+	_ module.ExamplesProvider       = (*Module)(nil)
+	_ module.PythonAPIDocsProvider  = (*Module)(nil)
 )
 
 // Module implements the module.Module interface for direct Ethereum node API access.
@@ -98,7 +97,7 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 			Functions: map[string]types.FunctionDoc{
 				// Discovery functions.
 				"list_datasources": {Signature: "list_datasources() -> list[dict]", Description: "List available ethnode datasources"},
-				"list_networks":    {Signature: "list_networks() -> list[dict]", Description: "List networks reachable for direct node access"},
+				"list_networks":    {Signature: "list_networks() -> list[dict]", Description: "List active network ids reachable for direct node access"},
 				// Beacon node (CL) functions.
 				"get_node_version":         {Signature: "get_node_version(network, instance) -> dict", Description: "Get beacon node software version"},
 				"get_node_syncing":         {Signature: "get_node_syncing(network, instance) -> dict", Description: "Get beacon node sync status"},
@@ -124,36 +123,6 @@ func (m *Module) PythonAPIDocs() map[string]types.ModuleDoc {
 			},
 		},
 	}
-}
-
-// GettingStartedSnippet returns a Markdown snippet for the getting-started resource.
-func (m *Module) GettingStartedSnippet() string {
-	return `## Ethereum Node API (Direct Access)
-
-Query individual beacon and execution nodes directly. Useful for checking sync status,
-peer counts, finality checkpoints, and comparing state across nodes during devnet debugging.
-
-Node instances follow the naming convention: ` + "`{client_cl}-{client_el}-{index}`" + ` (e.g., "lighthouse-geth-1").
-
-` + "```python" + `
-from ethpandaops import ethnode
-
-# Check beacon node sync status
-syncing = ethnode.get_node_syncing("my-devnet", "lighthouse-geth-1")
-print(f"Head slot: {syncing['data']['head_slot']}")
-
-# Check EL block number
-block_num = ethnode.eth_block_number("my-devnet", "lighthouse-geth-1")
-print(f"Latest block: {block_num}")
-
-# Check finality
-checkpoints = ethnode.get_finality_checkpoints("my-devnet", "lighthouse-geth-1")
-print(f"Finalized epoch: {checkpoints['data']['finalized']['epoch']}")
-
-# Generic beacon API call
-identity = ethnode.beacon_get("my-devnet", "lighthouse-geth-1", "/eth/v1/node/identity")
-` + "```" + `
-`
 }
 
 func (m *Module) Start(_ context.Context) error { return nil }
