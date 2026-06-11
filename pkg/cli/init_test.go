@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -192,57 +193,120 @@ func TestBuildComposeTemplate(t *testing.T) {
 }
 
 func TestResolveDockerSocketPath(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
+		goos       string
+		daemonOS   string
 		dockerHost string
 		want       string
 	}{
 		{
 			name:       "unset falls back to default",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
 			dockerHost: "",
 			want:       "/var/run/docker.sock",
 		},
 		{
 			name:       "rootless socket under XDG_RUNTIME_DIR",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
 			dockerHost: "unix:///run/user/1000/docker.sock",
 			want:       "/run/user/1000/docker.sock",
 		},
 		{
 			name:       "explicit rootful unix socket",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
 			dockerHost: "unix:///var/run/docker.sock",
 			want:       "/var/run/docker.sock",
 		},
 		{
 			name:       "tcp endpoint is not mountable, falls back to default",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
 			dockerHost: "tcp://127.0.0.1:2375",
 			want:       "/var/run/docker.sock",
 		},
 		{
 			name:       "ssh endpoint falls back to default",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
 			dockerHost: "ssh://user@remote",
 			want:       "/var/run/docker.sock",
 		},
 		{
 			name:       "empty unix path falls back to default",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
 			dockerHost: "unix://",
+			want:       "/var/run/docker.sock",
+		},
+		{
+			name:       "relative unix path falls back to default",
+			goos:       "linux",
+			daemonOS:   "Ubuntu 24.04 LTS",
+			dockerHost: "unix://run/user/1000/docker.sock",
+			want:       "/var/run/docker.sock",
+		},
+		{
+			name:       "unqueryable daemon still honors rootless DOCKER_HOST",
+			goos:       "linux",
+			daemonOS:   "",
+			dockerHost: "unix:///run/user/1000/docker.sock",
+			want:       "/run/user/1000/docker.sock",
+		},
+		{
+			name:       "Docker Desktop on Linux ignores DOCKER_HOST (VM cannot mount home-dir sockets)",
+			goos:       "linux",
+			daemonOS:   "Docker Desktop",
+			dockerHost: "unix:///home/me/.docker/desktop/docker.sock",
+			want:       "/var/run/docker.sock",
+		},
+		{
+			name:       "darwin ignores Docker Desktop DOCKER_HOST",
+			goos:       "darwin",
+			daemonOS:   "Docker Desktop",
+			dockerHost: "unix:///Users/me/.docker/run/docker.sock",
+			want:       "/var/run/docker.sock",
+		},
+		{
+			name:       "darwin ignores OrbStack DOCKER_HOST",
+			goos:       "darwin",
+			daemonOS:   "OrbStack",
+			dockerHost: "unix:///Users/me/.orbstack/run/docker.sock",
+			want:       "/var/run/docker.sock",
+		},
+		{
+			name:       "windows falls back to default",
+			goos:       "windows",
+			daemonOS:   "Docker Desktop",
+			dockerHost: "unix:///run/user/1000/docker.sock",
 			want:       "/var/run/docker.sock",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// t.Setenv mutates process env, so this test cannot be parallel.
-			t.Setenv("DOCKER_HOST", tt.dockerHost)
+			t.Parallel()
 
-			assert.Equal(t, tt.want, resolveDockerSocketPath())
+			assert.Equal(t, tt.want,
+				resolveDockerSocketPathFor(tt.goos, tt.daemonOS, tt.dockerHost))
 		})
 	}
 }
 
 // TestBuildComposeTemplateRootlessSocket verifies the generated compose binds
 // the rootless Docker socket from DOCKER_HOST rather than the rootful default
-// (issue #168).
+// (issue #168). DOCKER_HOST is only honored on Linux, so this end-to-end check
+// is skipped elsewhere; resolveDockerSocketPathFor covers the per-OS matrix.
 func TestBuildComposeTemplateRootlessSocket(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skipf("DOCKER_HOST socket resolution is Linux-only, GOOS=%s", runtime.GOOS)
+	}
+
 	t.Setenv("DOCKER_HOST", "unix:///run/user/1000/docker.sock")
 
 	result := buildComposeTemplate(defaultServerImage, "/home/user/.config/panda")

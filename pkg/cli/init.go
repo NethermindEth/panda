@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -463,15 +464,60 @@ const defaultDockerSocket = "/var/run/docker.sock"
 
 // resolveDockerSocketPath returns the host path of the Docker daemon socket to
 // bind-mount into the server container.
-//
-// It honors DOCKER_HOST when it points at a unix socket. Rootless Docker
-// exposes its socket under $XDG_RUNTIME_DIR (e.g.
-// unix:///run/user/1000/docker.sock), not /var/run/docker.sock, so mounting
-// the latter unconditionally leaves the server's sandbox backend unable to
-// reach the daemon ("permission denied", issue #168). For tcp:// / ssh:// and
-// other non-mountable schemes we fall back to the default path.
 func resolveDockerSocketPath() string {
-	if path, ok := strings.CutPrefix(os.Getenv("DOCKER_HOST"), "unix://"); ok && path != "" {
+	daemonOS := ""
+	if runtime.GOOS == "linux" {
+		daemonOS = daemonOperatingSystem()
+	}
+
+	return resolveDockerSocketPathFor(runtime.GOOS, daemonOS, os.Getenv("DOCKER_HOST"))
+}
+
+// daemonOperatingSystem returns the OperatingSystem reported by the connected
+// Docker daemon (e.g. "Docker Desktop", "Ubuntu 24.04 LTS"), or "" if the
+// daemon cannot be queried.
+func daemonOperatingSystem() string {
+	cli, err := newDockerClient()
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = cli.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	info, err := cli.Info(ctx)
+	if err != nil {
+		return ""
+	}
+
+	return info.OperatingSystem
+}
+
+// resolveDockerSocketPathFor honors DOCKER_HOST when it points at an absolute
+// unix socket path served by a native Linux daemon. Rootless Docker exposes
+// its socket under $XDG_RUNTIME_DIR (e.g. unix:///run/user/1000/docker.sock),
+// not /var/run/docker.sock, so mounting the latter unconditionally leaves the
+// server's sandbox backend unable to reach the daemon ("permission denied",
+// issue #168). For tcp:// / ssh:// and other non-mountable schemes we fall
+// back to the default path.
+//
+// VM-based daemons resolve bind-mount sources inside their VM, where
+// /var/run/docker.sock is always valid but host-side sockets under $HOME
+// generally are not shareable (Docker Desktop's VirtioFS fails with "error
+// while creating mount source path: operation not supported"). Following
+// testcontainers, a daemon reporting OperatingSystem "Docker Desktop" always
+// gets the default path — this covers Docker Desktop on Linux
+// (unix://$HOME/.docker/desktop/docker.sock). Non-Linux hosts always get the
+// default path too: rootless Docker is Linux-only and every macOS runtime
+// (Docker Desktop, OrbStack, colima) is a VM that serves the default path
+// internally.
+func resolveDockerSocketPathFor(goos, daemonOS, dockerHost string) string {
+	if goos != "linux" || daemonOS == "Docker Desktop" {
+		return defaultDockerSocket
+	}
+
+	if path, ok := strings.CutPrefix(dockerHost, "unix://"); ok && strings.HasPrefix(path, "/") {
 		return path
 	}
 
