@@ -17,7 +17,7 @@
     --line2: #e3dfd2;
     --ink: #211f1a;
     --mut: #6f6a5d;
-    --faint: #9b9585;
+    --faint: #8b8473;
     --accent: #bf5a3c;
     --ok: #3f7350;
     --ok-dim: rgba(63, 115, 80, .11);
@@ -41,7 +41,7 @@
     --line2: #2f2c24;
     --ink: #e9e4d6;
     --mut: #a59e8c;
-    --faint: #746e5e;
+    --faint: #847d6a;
     --accent: #e08e6d;
     --ok: #79b58c;
     --ok-dim: rgba(121, 181, 140, .13);
@@ -63,7 +63,7 @@
     --line2: #2f2c24;
     --ink: #e9e4d6;
     --mut: #a59e8c;
-    --faint: #746e5e;
+    --faint: #847d6a;
     --accent: #e08e6d;
     --ok: #79b58c;
     --ok-dim: rgba(121, 181, 140, .13);
@@ -119,14 +119,14 @@
     font-variant-numeric: tabular-nums;
     margin-right: 14px;
   }
-  .sub { margin: 4px 0 18px; font: 13px/1.55 var(--sans); color: var(--mut); max-width: 70ch; }
+  .sub { margin: 4px 0 18px; font: 13.5px/1.55 var(--sans); color: var(--mut); max-width: 70ch; }
 
   .panel {
     background: var(--panel);
     border: 1px solid var(--line2);
     border-radius: 4px;
   }
-  .note { margin: 10px 2px 0; font: 12px/1.65 var(--sans); color: var(--mut); max-width: 90ch; }
+  .note { margin: 10px 2px 0; font: 12.5px/1.65 var(--sans); color: var(--mut); max-width: 90ch; }
   .num { font-variant-numeric: tabular-nums; }
 
   /* ── topbar ──────────────────────────────────────────────────────────── */
@@ -171,6 +171,29 @@
   }
   #theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
 
+  /* ── run switcher (fetch-mode viewer only) ───────────────────────────── */
+  #run-switcher { display: flex; align-items: center; gap: 6px; }
+  #run-switcher select {
+    max-width: 280px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 4px 6px;
+    font: 600 11px/1.2 var(--mono);
+    color: var(--ink);
+  }
+  #run-switcher button {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 4px 8px;
+    font: 600 11px/1.2 var(--mono);
+    color: var(--mut);
+    cursor: pointer;
+  }
+  #run-switcher button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+  #run-switcher button:disabled { opacity: .35; cursor: default; }
+
   /* ── document head ───────────────────────────────────────────────────── */
   #doc-head { margin-top: 44px; }
   .eyebrow {
@@ -197,7 +220,7 @@
   .badge.pre { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, transparent); background: var(--amber-dim); }
   #meta {
     margin-top: 12px;
-    font: 13px/1.7 var(--sans);
+    font: 13.5px/1.7 var(--sans);
     color: var(--mut);
     overflow-wrap: anywhere;
   }
@@ -220,7 +243,7 @@
     .card:nth-child(n + 3) { border-top: 1px solid var(--line2); }
   }
   .card .k {
-    font: 600 10px/1.3 var(--sans);
+    font: 600 10.5px/1.3 var(--sans);
     letter-spacing: .16em;
     text-transform: uppercase;
     color: var(--mut);
@@ -238,7 +261,7 @@
     gap: 10px;
     flex-wrap: wrap;
   }
-  .card .s { margin-top: 7px; font-size: 11.5px; color: var(--faint); }
+  .card .s { margin-top: 7px; font-size: 12px; color: var(--mut); }
   .delta {
     font: 600 11.5px/1 var(--sans);
     font-variant-numeric: tabular-nums;
@@ -251,20 +274,19 @@
   /* ── charts ──────────────────────────────────────────────────────────── */
   .chart-wrap { padding: 18px 14px 10px; position: relative; }
   svg { display: block; }
-  svg text { font-family: var(--sans); fill: var(--mut); }
+  svg text { font-family: var(--sans); font-size: 11.5px; fill: var(--mut); }
   .axis line, .grid line { stroke: var(--line2); }
   .axis-strong line { stroke: var(--line); }
-  .line-pass { stroke: var(--ok); fill: none; stroke-width: 1.8; }
-  .line-score { stroke: var(--blue); fill: none; stroke-width: 1.8; }
-  .line-tok { stroke: var(--amber); fill: none; stroke-width: 1.8; }
+  .line-pass { stroke: var(--ok); fill: none; stroke-width: 2; }
+  .line-tok { stroke: var(--amber); fill: none; stroke-width: 2; }
   .pt-pass { fill: var(--ok); }
-  .pt-score { fill: var(--blue); }
   .pt-tok { fill: var(--amber); }
+  .pt-val { font: 600 11px var(--sans); }
   .pt-hollow { fill: var(--panel); stroke: var(--amber); stroke-width: 1.6; }
   .pt-ring { fill: none; stroke-width: 1.4; }
   .guide { stroke: var(--mut); stroke-dasharray: 3 3; opacity: 0; }
   .hover-zone { fill: transparent; cursor: crosshair; }
-  .legend { display: flex; gap: 20px; padding: 4px 16px 12px; font: 11.5px/1 var(--sans); color: var(--mut); flex-wrap: wrap; }
+  .legend { display: flex; gap: 20px; padding: 4px 16px 12px; font: 12.5px/1.4 var(--sans); color: var(--mut); flex-wrap: wrap; }
   .legend .sw { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 7px; border-radius: 1px; }
   .legend .sw.dotc { width: 9px; height: 9px; border-radius: 50%; }
 
@@ -274,6 +296,39 @@
   .dot-run:hover { stroke: var(--ink); }
   .dot-run.selected { stroke: var(--sel); stroke-width: 2.2; }
   .pct-rule { stroke: var(--mut); stroke-dasharray: 2 4; opacity: .7; }
+
+  /* run history chart grid */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .chart-grid .wide { grid-column: 1 / -1; }
+  @media (max-width: 920px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-head { display: flex; align-items: center; gap: 9px; padding: 14px 18px 0; font: 600 12.5px/1.3 var(--sans); color: var(--ink); flex-wrap: wrap; }
+  .chart-head .sw { width: 14px; height: 4px; border-radius: 1px; flex: none; }
+  .chart-controls { margin-left: auto; display: flex; gap: 8px; }
+  .seg.mini button { padding: 5px 9px; font-size: 10px; }
+
+  /* run-details expander (doc head) */
+  #run-details { margin-top: 16px; max-width: 620px; }
+  #run-details summary { cursor: pointer; padding: 9px 14px; font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); user-select: none; }
+  #run-details summary:hover { color: var(--accent); }
+  #run-details .kv { padding: 2px 14px 12px; margin: 0; }
+
+  .commit-msg {
+    font: 12px/1.5 var(--sans);
+    color: var(--mut);
+    max-width: 340px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  /* matrix history cells */
+  td.mxh, th.mxh-lbl { text-align: center; }
+  td.mxh { font: 700 11.5px/1.6 var(--mono); white-space: nowrap; }
+  td.mxh.ok { color: var(--ok); background: var(--ok-dim); }
+  td.mxh.bad { color: var(--bad); background: var(--bad-dim); }
+  td.mxh.mid { color: var(--amber); background: var(--amber-dim); }
+  td.mxh.none { color: var(--faint); }
 
   /* categories */
   .cat-row { cursor: pointer; }
@@ -288,10 +343,10 @@
   .cat-row.active text.lbl { fill: var(--accent); }
 
   /* ── tables ──────────────────────────────────────────────────────────── */
-  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
   th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line2); vertical-align: top; }
   th {
-    font: 600 10px/1.5 var(--sans);
+    font: 600 10.5px/1.5 var(--sans);
     letter-spacing: .13em;
     text-transform: uppercase;
     color: var(--mut);
@@ -309,15 +364,15 @@
   th.sortable.asc::after { content: "▲"; color: var(--ink); font-size: 8px; }
   th.sortable.desc::after { content: "▼"; color: var(--ink); font-size: 8px; }
 
-  .qid { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+  .qid { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
   button.qid { background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
   button.qid:hover { color: var(--accent); }
   td.qcell { max-width: 320px; }
-  td.qcell .qid { font-size: 11px; color: var(--mut); }
+  td.qcell .qid { font-size: 11.5px; color: var(--mut); }
   .qtext {
     display: block;
     margin-top: 2px;
-    font: 12.5px/1.4 var(--sans);
+    font: 13px/1.4 var(--sans);
     color: var(--ink);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -345,7 +400,7 @@
   .mx-cell.bad { background: var(--bad-dim); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
   .mx-cell:hover { border-color: var(--ink); }
   .mx-cell.selected { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel); }
-  .verdict { font: 11.5px/1.4 var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .verdict { font: 12px/1.4 var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .verdict.up { color: var(--ok); }
   .verdict.down { color: var(--bad); font-weight: 700; }
   .verdict.flat, .verdict.na { color: var(--faint); }
@@ -369,7 +424,7 @@
     border: 0;
     border-right: 1px solid var(--line);
     padding: 7px 13px;
-    font: 600 10.5px/1 var(--sans);
+    font: 600 11px/1 var(--sans);
     letter-spacing: .1em;
     text-transform: uppercase;
     color: var(--mut);
@@ -383,7 +438,7 @@
     border: 1px solid var(--line);
     border-radius: 999px;
     padding: 4px 12px;
-    font: 11.5px var(--sans);
+    font: 12px var(--sans);
     color: var(--mut);
     cursor: pointer;
   }
@@ -404,7 +459,7 @@
   #reset-filters:hover { color: var(--bad); border-color: var(--bad); }
   #agg {
     padding: 10px 14px;
-    font: 12.5px/1.5 var(--sans);
+    font: 13px/1.5 var(--sans);
     font-variant-numeric: tabular-nums;
     color: var(--mut);
     border-bottom: 1px solid var(--line2);
@@ -420,7 +475,7 @@
   @keyframes flash { 0%, 35% { background: color-mix(in srgb, var(--accent) 24%, transparent); } 100% { background: transparent; } }
   .pill {
     display: inline-block;
-    font: 700 10px/1 var(--sans);
+    font: 700 10.5px/1 var(--sans);
     letter-spacing: .1em;
     text-transform: uppercase;
     padding: 4px 8px;
@@ -429,7 +484,7 @@
   .pill.ok { color: var(--ok); background: var(--ok-dim); }
   .pill.bad { color: var(--bad); background: var(--bad-dim); }
   .pill.crash { color: var(--bg); background: var(--bad); }
-  td.reason-cell { max-width: 340px; color: var(--mut); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.reason-cell { max-width: 340px; color: var(--mut); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tagset { display: flex; gap: 4px; flex-wrap: wrap; }
   .tagset span { font: 10.5px var(--sans); color: var(--mut); border: 1px solid var(--line2); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
   td.subj { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--mut); }
@@ -471,8 +526,8 @@
   }
   #drawer-close:hover { color: var(--bad); border-color: var(--bad); }
   #drawer-body { overflow-y: auto; padding: 16px 20px 28px; }
-  .kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 14px; font-size: 13px; margin: 16px 0; }
-  .kv dt { font: 600 10px/1.8 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); margin: 0; }
+  .kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 14px; font-size: 13.5px; margin: 16px 0; }
+  .kv dt { font: 600 10.5px/1.8 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); margin: 0; }
   .kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .reason {
     background: var(--bg);
@@ -511,7 +566,14 @@
     margin: 6px 0 2px;
   }
   .answer.empty { color: var(--faint); font: 12.5px/1.6 var(--sans); }
-  .drawer-label { font: 600 10px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--mut); margin: 18px 0 6px; }
+  .drawer-label { font: 600 10.5px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--mut); margin: 18px 0 6px; }
+  .toolcalls { margin: 12px 0 0; border: 1px solid var(--line2); border-radius: 3px; background: var(--panel2); }
+  .toolcalls summary { cursor: pointer; padding: 8px 11px; font: 600 11px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--mut); user-select: none; }
+  .toolcalls summary:hover { color: var(--accent); }
+  .toolcalls .tc { display: flex; gap: 9px; padding: 4px 11px; font: 12px/1.6 var(--mono); border-top: 1px solid var(--line2); white-space: nowrap; overflow: hidden; }
+  .toolcalls .tc-name { color: var(--ink); font-weight: 700; flex: none; }
+  .toolcalls .tc-args { color: var(--mut); overflow: hidden; text-overflow: ellipsis; }
+  .toolcalls .tc.is-err .tc-name { color: var(--bad); }
   .sibs { display: flex; gap: 5px; flex-wrap: wrap; }
   .trace-btn {
     display: inline-block;
@@ -541,7 +603,7 @@
     border-radius: 4px;
     box-shadow: var(--shadow);
     padding: 9px 12px;
-    font: 12px/1.65 var(--sans);
+    font: 12.5px/1.65 var(--sans);
     max-width: 360px;
     color: var(--mut);
   }
@@ -568,9 +630,10 @@
 
 <header id="topbar">
   <div class="bar">
-    <span class="brand">🐼 Panda <span class="dim">· Release qualification</span></span>
+    <span class="brand">🐼 Panda <span class="dim" id="brand-context">· Release qualification</span></span>
+    <span id="run-switcher" hidden></span>
     <nav id="nav">
-      <a href="#trend">Releases</a>
+      <a href="#trend" id="nav-history">Releases</a>
       <a href="#tokens">Tokens</a>
       <a href="#categories">Categories</a>
       <a href="#matrix">Questions</a>
@@ -582,27 +645,63 @@
 
 <main>
   <section id="doc-head" style="margin-top:44px">
-    <p class="eyebrow">Release qualification report</p>
+    <p class="eyebrow" id="eyebrow">Release qualification report</p>
     <div class="tag-line">
       <h1 id="tag"></h1>
       <span id="prerelease-badge" class="badge pre" hidden>Pre-release</span>
     </div>
     <div id="meta"></div>
+    <details id="run-details" class="panel">
+      <summary>run details</summary>
+      <dl class="kv" id="run-details-kv"></dl>
+    </details>
   </section>
 
   <section id="headline" style="margin-top:30px">
     <div class="cards" id="cards"></div>
-    <p class="note" id="cards-note"></p>
   </section>
 
   <section id="trend">
-    <h2><span class="no">1.</span>Release history</h2>
-    <p class="sub">Pass rate, score, and token cost across every qualified release, oldest to newest. Hover the chart for exact numbers.</p>
-    <div class="panel">
-      <div class="chart-wrap"><div id="trend-chart"></div></div>
-      <div class="legend" id="trend-legend"></div>
+    <h2><span class="no">1.</span><span id="trend-title">Release history</span></h2>
+    <p class="sub" id="trend-sub">Pass rate and token cost across every qualified release, oldest to newest. Hover any point for its full detail.</p>
+    <div class="chart-grid">
+      <div class="panel chart-card">
+        <div class="chart-head"><span class="sw" style="background:var(--ok)"></span>Pass rate</div>
+        <div class="chart-wrap"><div id="pass-chart"></div></div>
+      </div>
+      <div class="panel chart-card">
+        <div class="chart-head"><span class="sw" style="background:var(--amber)"></span><span id="tok-title">Tokens per correct run</span>
+          <span class="chart-controls">
+            <span class="seg mini agg-seg" title="token aggregation (shared with the scatter)">
+              <button data-v="p50">p50</button>
+              <button data-v="p90">p90</button>
+              <button data-v="p95">p95</button>
+              <button data-v="solve">per solve</button>
+            </span>
+          </span>
+        </div>
+        <div class="chart-wrap"><div id="tok-chart"></div></div>
+      </div>
+      <div class="panel chart-card wide">
+        <div class="chart-head"><span class="sw" style="background:var(--blue)"></span>Cost vs correctness
+          <span class="chart-controls">
+            <span class="seg mini agg-seg" title="token aggregation (shared with the timeline)">
+              <button data-v="p50">p50</button>
+              <button data-v="p90">p90</button>
+              <button data-v="p95">p95</button>
+              <button data-v="solve">per solve</button>
+            </span>
+            <span class="seg mini" id="sc-scale" title="token-axis scale">
+              <button data-v="lin">linear</button>
+              <button data-v="log">log</button>
+            </span>
+          </span>
+        </div>
+        <div class="chart-wrap"><div id="scatter-chart"></div></div>
+        <div class="legend" id="scatter-legend"></div>
+      </div>
     </div>
-    <div class="panel tbl-scroll" style="margin-top:12px"><table id="rel-table"></table></div>
+    <div class="panel tbl-scroll" style="margin-top:14px"><table id="rel-table"></table></div>
     <p class="note" id="trend-note"></p>
   </section>
 
@@ -617,13 +716,13 @@
 
   <section id="categories">
     <h2><span class="no">3.</span>Category performance</h2>
-    <p class="sub">Pass rate by case tag. Click a bar to filter the run explorer to that category.</p>
+    <p class="sub">Token cost per case tag — box/dots are the cost of correct runs (quartiles when there are enough), color is the pass rate. Click a row to filter the run explorer.</p>
     <div class="panel"><div class="chart-wrap"><div id="cat-chart"></div></div></div>
   </section>
 
   <section id="matrix">
     <h2><span class="no">4.</span>Questions across runs</h2>
-    <p class="sub">Each cell is one run — click it for the full grader verdict. The last column compares against the previous release.</p>
+    <p class="sub">Each question across the comparison history, oldest to newest — the final column is this run's cells; click one for the full grader verdict.</p>
     <div class="panel tbl-scroll"><table id="mx-table"></table></div>
   </section>
 
@@ -662,8 +761,90 @@
 
 <script>
 "use strict";
-(() => {
-  const RAW = window.__PANDA_EVAL_DATA__;
+(async () => {
+  /* Two ways onto this page: a payload baked in at build time (release reports,
+     CI artifacts — fully offline), or fetch mode (the gh-pages CI viewer): one
+     shared copy of this page plus a manifest of runs, each commit a small JSON
+     fetched on demand — walking commits never re-ships the UI. */
+  async function fetchMode() {
+    /* Pages serves this shell; the DATA comes straight off the gh-pages branch
+       via raw.githubusercontent — fresh seconds after a publish, no Pages deploy
+       in the path. Same-origin fallback covers local serving; ?src= overrides. */
+    const dataBase = (() => {
+      const override = new URLSearchParams(location.search).get("src");
+      if (override) return new URL(override.endsWith("/") ? override : override + "/", location.href);
+      const m = location.hostname.match(/^([a-z0-9-]+)\.github\.io$/i);
+      const repo = location.pathname.split("/").filter(Boolean)[0];
+      if (m && repo) {
+        return new URL(`https://raw.githubusercontent.com/${m[1]}/${repo}/gh-pages/eval/ci/`);
+      }
+      return new URL(".", location.href);
+    })();
+    const get = async (name) => {
+      const res = await fetch(new URL(name, dataBase), { cache: "no-store" });
+      if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
+      return res.json();
+    };
+    /* the manifest is the one mutable file — bust CDN caches for it; payloads
+       are sha-addressed and can cache forever */
+    const manifest = await get("manifest.json?cb=" + Date.now());
+    const all = (manifest.runs || []).filter(r => r.id && r.created_at);
+    if (!all.length) throw new Error("manifest has no runs");
+    const want = new URLSearchParams(location.search).get("run");
+    /* bare page: the newest qualified release is the canonical state of the
+       world; fall back to master, then anything */
+    const sel = all.find(r => r.id === want) ||
+      all.find(r => r.branch === "releases") ||
+      all.find(r => r.branch === "master") || all[0];
+    buildSwitcher(all, sel);
+    return get(`runs/${sel.id}.json`);
+  }
+
+  function buildSwitcher(all, sel) {
+    const host = document.getElementById("run-switcher");
+    const go = id => {
+      const sp = new URLSearchParams(location.search);
+      sp.set("run", id);
+      location.search = "?" + sp.toString();
+    };
+    const rank = b => b === "releases" ? 0 : b === "master" ? 1 : 2;
+    const branches = [...new Set(all.map(r => r.branch))]
+      .sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : 1));
+    /* newest first within the selected branch */
+    const sibs = all.filter(r => r.branch === sel.branch)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    const at = sibs.findIndex(r => r.id === sel.id);
+
+    const opt = (v, label, on) =>
+      `<option value="${v.replace(/"/g, "&quot;")}"${on ? " selected" : ""}>${label}</option>`;
+    host.innerHTML =
+      `<select id="sw-branch" title="branch">${branches.map(b =>
+        opt(b, b, b === sel.branch)).join("")}</select>` +
+      `<select id="sw-commit" title="commit">${sibs.map(r =>
+        opt(r.id, `${r.branch === "releases" ? (r.tag || r.id.split("/")[1]) : (r.sha || "").slice(0, 7)} · ${(r.created_at || "").slice(5, 10)} · ${Math.round((r.pass_rate || 0) * 100)}%`, r.id === sel.id)).join("")}</select>` +
+      `<button id="sw-prev" title="older commit"${at >= sibs.length - 1 ? " disabled" : ""}>‹</button>` +
+      `<button id="sw-next" title="newer commit"${at <= 0 ? " disabled" : ""}>›</button>`;
+    host.hidden = false;
+    host.querySelector("#sw-branch").addEventListener("change", ev => {
+      const newest = all.filter(r => r.branch === ev.target.value)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+      if (newest) go(newest.id);
+    });
+    host.querySelector("#sw-commit").addEventListener("change", ev => go(ev.target.value));
+    host.querySelector("#sw-prev").addEventListener("click", () => sibs[at + 1] && go(sibs[at + 1].id));
+    host.querySelector("#sw-next").addEventListener("click", () => sibs[at - 1] && go(sibs[at - 1].id));
+  }
+
+  let RAW = window.__PANDA_EVAL_DATA__;
+  if (!RAW) {
+    try {
+      RAW = await fetchMode();
+    } catch (err) {
+      document.body.innerHTML = `<div class="err">no payload injected and fetch mode failed (${err.message}) — ` +
+        "built pages come from scripts/release_report.py; the fetch-mode viewer needs manifest.json + runs/ alongside this file</div>";
+      return;
+    }
+  }
   if (!RAW || !RAW.record) {
     document.body.innerHTML = '<div class="err">no payload injected — this template must be built by scripts/release_report.py</div>';
     return;
@@ -778,23 +959,58 @@
     return (p && p.p50) ? { v: p.p50, isP50: true } : { v: e.mean_tokens_correct || 0, isP50: false };
   };
   const runStatus = r => r.crashed ? "crash" : (r.correct ? "pass" : "fail");
-  const shortSubject = s => String(s || "").replace(/^[a-z0-9_-]+:/i, "");
+  const shortSubject = s => String(s || "").split("/").pop();
   const CANON_TIP = "exact per-run phrasing unavailable for this record; canonical wording shown";
   const canonMark = r => r.question_canonical ? `<span class="canon" title="${CANON_TIP}">°</span>` : "";
 
-  /* ── topbar ───────────────────────────────────────────────────────────── */
-  document.title = `Panda release qualification — ${record.tag}`;
+  /* ── topbar + doc head ────────────────────────────────────────────────── */
+  const CI = record.kind === "ci";
+  const UNIT = CI ? "run" : "release";
+  document.title = CI ? `Panda CI eval — ${record.tag}` : `Panda release qualification — ${record.tag}`;
+  if (CI) {
+    $("#brand-context").textContent = "· CI eval";
+    $("#eyebrow").textContent = "CI smoke report";
+    $("#nav-history").textContent = "History";
+    $("#trend-title").textContent = "Run history";
+    $("#trend-sub").textContent = "Pass rate and token cost across this branch's measured commits, " +
+      "with the master baseline and the most recent release as reference points. Hover any point for its full detail.";
+  }
   $("#tag").textContent = record.tag;
   $("#prerelease-badge").hidden = !record.prerelease;
-  $("#meta").innerHTML =
-    `commit <b>${esc((record.commit || "").slice(0, 9) || "—")}</b>` +
-    ` · ${esc((record.created_at || "").replace("T", " ").slice(0, 16))} UTC` +
-    ` · cases <b>${esc(record.cases || "—")}</b>` +
-    ` · subject <b>${esc((record.subjects || []).join(", "))}</b>` +
-    ` · ${byQ.size} questions · ${runs.length} runs` +
-    (prev ? ` · vs <b>${esc(prev.tag)}</b>` : " · first qualified release");
 
-  /* ── headline cards ───────────────────────────────────────────────────── */
+  /* one quiet line; everything deeper lives in the run-details expander */
+  const commitHtml = record.repo && record.commit
+    ? `<a href="https://github.com/${esc(record.repo)}/commit/${esc(record.commit)}"><b>${esc(record.commit.slice(0, 9))}</b></a>`
+    : `<b>${esc((record.commit || "").slice(0, 9) || "—")}</b>`;
+  $("#meta").innerHTML = [
+    CI && record.branch ? `branch <b>${esc(record.branch)}</b>` : "",
+    `commit ${commitHtml}`,
+    esc((record.created_at || "").replace("T", " ").slice(0, 16)) + " UTC",
+    `subject <b>${esc((record.subjects || []).map(shortSubject).join(", "))}</b>`,
+  ].filter(Boolean).join(" · ");
+
+  (() => {
+    const tp = record.token_percentiles || {};
+    const links = [
+      CI && record.pr && record.repo
+        ? `<a href="https://github.com/${esc(record.repo)}/pull/${esc(record.pr)}">PR #${esc(record.pr)}</a>` : "",
+      CI && record.run_url ? `<a href="${esc(record.run_url)}">CI run ↗</a>` : "",
+    ].filter(Boolean).join(" · ");
+    const rows = [
+      ["cases", esc(record.cases || "—")],
+      ["subjects", esc((record.subjects || []).join(", "))],
+      ["coverage", `${byQ.size} questions · ${runs.length} runs`],
+      ["compared to", prev ? esc(prev.tag) : (CI ? "first recorded run" : "first qualified release")],
+      CI && record.event ? ["trigger", esc(record.event)] : null,
+      links ? ["links", links] : null,
+      ["mean score", record.mean_score != null ? record.mean_score.toFixed(3) : "—"],
+      ["tokens", `p50 ${fTok(tp.p50 || 0)} · p90 ${fTok(tp.p90 || 0)} · max ${fTok(tp.max || 0)} per correct run`],
+      ["scoring", "score = correctness-gated token efficiency: a correct run at reference cost ≈ 0.25, leaner runs score higher, wrong runs score 0. " + EFF_EXPLAIN],
+    ].filter(Boolean);
+    $("#run-details-kv").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  })();
+
+  /* ── headline cards: four numbers, one row ────────────────────────────── */
   function deltaChip(cur, prv, { fmt, goodWhen = "up", neutral = false } = {}) {
     if (prv == null || !isFinite(prv)) return "";
     const d = cur - prv;
@@ -812,206 +1028,390 @@
     const tp = record.token_percentiles || {};
     const ptp = prev && prev.token_percentiles;
     const fmtPP = d => (d * 100).toFixed(1) + "pp";
-    const fmtAbs = d => d.toFixed(3);
     const fmtRel = base => d => Math.round(d / base * 100) + "%";
     const eff = record.efficiency_vs;
     const parity = 0.25 * record.pass_rate;
     const effCard = eff
       ? card("efficiency",
           `<span style="color:${eff.score >= parity ? "var(--ok)" : "var(--bad)"}">${eff.score.toFixed(3)}</span>`,
-          `vs ${esc(eff.ref_tag)} · ${parity.toFixed(3)} = parity` +
-            (eff.skipped ? ` · ${eff.skipped} runs w/o ref` : ""),
+          `vs ${esc(eff.ref_tag)} · ${parity.toFixed(3)} = same per-question cost`,
           "", EFF_EXPLAIN)
-      : card("efficiency", `<span style="color:var(--faint)">—</span>`, "no reference release", "", EFF_EXPLAIN);
+      : card("efficiency", `<span style="color:var(--faint)">—</span>`, "no reference to compare against", "", EFF_EXPLAIN);
     const tps = record.tokens_per_solve ||
       (nOk ? runs.reduce((a, r) => a + (r.tokens || 0), 0) / nOk : 0);
     const ptps = prev && prev.tokens_per_solve;
-    const html = [
+    $("#cards").innerHTML = [
       card("pass rate", fPct(record.pass_rate), `${nOk}/${runs.length} runs correct`,
         deltaChip(record.pass_rate, prev && prev.pass_rate, { fmt: fmtPP })),
-      card("mean score", record.mean_score.toFixed(3), "token-efficiency, correctness-gated",
-        deltaChip(record.mean_score, prev && prev.mean_score, { fmt: fmtAbs })),
       effCard,
-      card("tokens / solve", fTok(tps), "all spend ÷ correct answers",
-        ptps ? deltaChip(tps, ptps, { fmt: fmtRel(ptps), goodWhen: "down" }) : ""),
       card("tokens p50", fTok(tp.p50 || 0), "per correct run",
         ptp && ptp.p50 ? deltaChip(tp.p50, ptp.p50, { fmt: fmtRel(ptp.p50), goodWhen: "down" }) : ""),
-      card("tokens p90", fTok(tp.p90 || 0), "per correct run",
-        ptp && ptp.p90 ? deltaChip(tp.p90, ptp.p90, { fmt: fmtRel(ptp.p90), goodWhen: "down" }) : ""),
-      card("questions", String(byQ.size), esc(record.cases || ""),
-        deltaChip(byQ.size, prev && Object.keys(prev.questions || {}).length, { fmt: d => String(d), neutral: true })),
-      card("runs", String(runs.length), "phrasings \u00d7 repeats per question",
-        deltaChip(runs.length, prev && prev.runs, { fmt: d => String(d), neutral: true })),
+      card("tokens / solve", fTok(tps), "all spend ÷ correct answers",
+        ptps ? deltaChip(tps, ptps, { fmt: fmtRel(ptps), goodWhen: "down" }) : ""),
     ].join("");
-    $("#cards").innerHTML = html;
-    $("#cards-note").textContent = "efficiency = " + EFF_EXPLAIN +
-      " · refs come from the previous release's per-question median tokens over correct runs";
   })();
 
-  /* ── trend chart ──────────────────────────────────────────────────────── */
-  function renderTrend() {
-    const host = $("#trend-chart");
+  /* ── run history: two timelines + cost-vs-correctness scatter ─────────── */
+  /* Short name for an entry on the x-axis and scatter: the current commit gets
+     its sha, prior commits on the same branch count back ("-1", "-2", …),
+     other-branch CI baselines show their branch, releases keep their tag. */
+  const entryLabel = i => {
+    const e = releases[i];
+    if (i === releases.length - 1) return CI ? ((e.commit || "").slice(0, 7) || e.tag) : e.tag;
+    if (e.kind === "ci") {
+      if (e.branch === record.branch) {
+        return "-" + releases.slice(i + 1).filter(o => o.kind === "ci" && o.branch === record.branch).length;
+      }
+      return e.branch || "ci";
+    }
+    return e.tag;
+  };
+  /* ── view state: every tweak lives in the URL so views are linkable ───── */
+  const VIEW_DEFAULTS = { agg: "p95", scale: "log" };
+  const view = (() => {
+    const sp = new URLSearchParams(location.search);
+    return {
+      agg: ["p50", "p90", "p95", "solve"].includes(sp.get("agg")) ? sp.get("agg") : VIEW_DEFAULTS.agg,
+      scale: ["lin", "log"].includes(sp.get("scale")) ? sp.get("scale") : VIEW_DEFAULTS.scale,
+    };
+  })();
+  function syncURL(updates) {
+    const sp = new URLSearchParams(location.search);
+    for (const [k, v, dflt] of updates) {
+      if (v == null || v === "" || v === dflt) sp.delete(k);
+      else sp.set(k, v);
+    }
+    const qs = sp.toString();
+    /* `history` is shadowed by the payload's comparison records — go via window */
+    window.history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
+  }
+
+  /* token aggregation shared by the timeline and the scatter; older records
+     predate p95 and fall back (p90, then mean), marked approximate */
+  const AGG_LABEL = { p50: "p50", p90: "p90", p95: "p95", solve: "per solve" };
+  const aggOf = e => {
+    if (view.agg === "solve") {
+      return e.tokens_per_solve
+        ? { v: e.tokens_per_solve, approx: false }
+        : { v: e.mean_tokens_correct || 0, approx: true };
+    }
+    const pcts = e.token_percentiles || {};
+    if (pcts[view.agg]) return { v: pcts[view.agg], approx: false };
+    if (view.agg === "p95" && pcts.p90) return { v: pcts.p90, approx: true };
+    return { v: e.mean_tokens_correct || 0, approx: true };
+  };
+  const parityOf = e => 0.25 * e.pass_rate;
+
+  function trendTip(i, ev) {
+    const e = releases[i], t = aggOf(e);
+    const nOk = Math.round(e.pass_rate * e.runs);
+    showTip(
+      `<b>${esc(e.tag)}</b>${i === releases.length - 1 ? " · current" : ""}${e.prerelease ? " · pre" : ""}<br>` +
+      `${fDate(e.created_at)} · ${e.runs} runs · ${esc(e.cases || "")}<br>` +
+      `pass <b class="ok">${fPct(e.pass_rate)}</b> (${nOk}/${e.runs}) · score <b>${e.mean_score != null ? e.mean_score.toFixed(3) : "—"}</b><br>` +
+      `tokens ${t.approx ? "≈" : ""}${AGG_LABEL[view.agg]} <b>${fTok(t.v)}</b>` +
+      (e.efficiency_vs
+        ? `<br>eff vs ${esc(e.efficiency_vs.ref_tag)} <b class="${e.efficiency_vs.score >= parityOf(e) ? "ok" : "bad"}">${e.efficiency_vs.score.toFixed(3)}</b>`
+        : ""),
+      ev.clientX, ev.clientY);
+  }
+
+  function lineChart(host, { val, fmt, yMax, yTicks, lineCls, ptCls, hollow }) {
     host.innerHTML = "";
-    const W = Math.max(340, host.parentElement.getBoundingClientRect().width - 20);
-    const ml = 46, mr = 18;
-    const p1t = 14, p1b = 178;          /* pane 1: rates */
-    const p2t = 206, p2b = 286;         /* pane 2: tokens */
-    const effs = releases.map(e => e.efficiency_vs || null);
-    const hasEff = effs.some(Boolean);
-    const p3t = 312, p3b = 360;         /* pane 3: chained efficiency (when present) */
-    const axisB = hasEff ? p3b : p2b;
-    const lblH = 58;
-    const H = axisB + lblH;
+    const W = Math.max(260, host.parentElement.getBoundingClientRect().width - 16);
+    const ml = 52, mr = 22, top = 24, bot = 174, H = 212;
     const svg = sv("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
     const n = releases.length;
     const x = i => n === 1 ? (ml + (W - ml - mr) / 2) : ml + (W - ml - mr) * i / (n - 1);
-    const y1 = v => p1b - (p1b - p1t) * v;
-    const toks = releases.map(tokenLabel);
-    const tokMax = Math.max(1, ...toks.map(t => t.v)) * 1.15;
-    const y2 = v => p2b - (p2b - p2t) * (v / tokMax);
-    const parityOf = e => 0.25 * e.pass_rate;
-    const effMax = Math.max(0.3,
-      ...effs.map(f => f ? f.score : 0),
-      ...releases.filter((e, i) => effs[i]).map(parityOf)) * 1.2;
-    const y3 = v => p3b - (p3b - p3t) * (v / effMax);
+    const y = v => bot - (bot - top) * (v / yMax);
+    const clampX = (px, half) => Math.max(ml + half + 4, Math.min(px, W - mr - half + 18));
 
-    /* gridlines pane 1 */
-    for (const v of [0, .25, .5, .75, 1]) {
+    for (const [v, lbl] of yTicks) {
       const g = sv("g", { class: "grid" });
-      g.appendChild(sv("line", { x1: ml, x2: W - mr, y1: y1(v), y2: y1(v) }));
+      g.appendChild(sv("line", { x1: ml, x2: W - mr, y1: y(v), y2: y(v) }));
       svg.appendChild(g);
-      svg.appendChild(svText(ml - 7, y1(v) + 3, Math.round(v * 100) + "%", { "text-anchor": "end", "font-size": 9 }));
+      svg.appendChild(svText(ml - 9, y(v) + 4, lbl, { "text-anchor": "end" }));
     }
-    /* gridlines pane 2 */
-    for (const v of [0, tokMax / 1.15]) {
-      const g = sv("g", { class: "grid" });
-      g.appendChild(sv("line", { x1: ml, x2: W - mr, y1: y2(v), y2: y2(v) }));
-      svg.appendChild(g);
-      svg.appendChild(svText(ml - 7, y2(v) + 3, fTok(v), { "text-anchor": "end", "font-size": 9 }));
-    }
-    svg.appendChild(svText(ml, p2t - 7, "tokens p50 (correct runs)", { "font-size": 9 }));
 
-    /* pane 3: efficiency vs prev — each point is anchored to ITS previous release,
-       so this is a per-step indicator, not a level; no connecting line on purpose */
-    if (hasEff) {
-      const g0 = sv("g", { class: "grid" });
-      g0.appendChild(sv("line", { x1: ml, x2: W - mr, y1: y3(0), y2: y3(0) }));
-      svg.appendChild(g0);
-      svg.appendChild(svText(ml - 7, y3(0) + 3, "0", { "text-anchor": "end", "font-size": 9 }));
-      svg.appendChild(svText(ml - 7, y3(effMax / 1.2) + 3, (effMax / 1.2).toFixed(2),
-        { "text-anchor": "end", "font-size": 9 }));
-      svg.appendChild(svText(ml, p3t - 7,
-        "efficiency vs prev release (chained — each dot scored against its own predecessor)",
-        { "font-size": 9 }));
+    if (n > 1) {
+      let d = "", pen = false;
       releases.forEach((e, i) => {
-        const f = effs[i];
-        if (!f) return;
-        const px = x(i), par = parityOf(e);
-        const good = f.score >= par;
-        svg.appendChild(sv("line", {
-          x1: px, x2: px, y1: y3(0), y2: y3(f.score),
-          stroke: good ? "var(--ok)" : "var(--bad)", "stroke-width": 1, opacity: .45,
-        }));
-        svg.appendChild(sv("line", {
-          x1: px - 6, x2: px + 6, y1: y3(par), y2: y3(par),
-          stroke: "var(--mut)", "stroke-width": 1.4, "stroke-dasharray": "2 2",
-        }));
-        svg.appendChild(sv("circle", {
-          cx: px, cy: y3(f.score), r: 3.4,
-          fill: good ? "var(--ok)" : "var(--bad)",
-        }));
+        const v = val(i);
+        if (v == null) { pen = false; return; }
+        d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+        pen = true;
       });
+      if (d) svg.appendChild(sv("path", { d, class: lineCls }));
     }
 
-    /* series */
-    const path = (vals, yfn, cls) => {
-      if (n === 1) return;
-      const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${yfn(v).toFixed(1)}`).join("");
-      svg.appendChild(sv("path", { d, class: cls }));
-    };
-    path(releases.map(e => e.pass_rate), y1, "line-pass");
-    path(releases.map(e => e.mean_score), y1, "line-score");
-    path(toks.map(t => t.v), y2, "line-tok");
-
+    const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - ml - mr) / 64) + 1)));
     releases.forEach((e, i) => {
-      svg.appendChild(sv("circle", { cx: x(i), cy: y1(e.pass_rate), r: 3.2, class: "pt-pass" }));
-      svg.appendChild(sv("circle", { cx: x(i), cy: y1(e.mean_score), r: 3.2, class: "pt-score" }));
+      const v = val(i);
+      if (v == null) return;
+      const cur = i === n - 1;
       svg.appendChild(sv("circle", {
-        cx: x(i), cy: y2(toks[i].v), r: 3.2,
-        class: toks[i].isP50 ? "pt-tok" : "pt-hollow",
+        cx: x(i), cy: y(v), r: 3.6,
+        class: hollow && hollow(i) ? "pt-hollow" : ptCls,
       }));
-      if (i === n - 1) { /* ring the current release */
-        for (const cy of [y1(e.pass_rate), y1(e.mean_score), y2(toks[i].v)]) {
-          svg.appendChild(sv("circle", { cx: x(i), cy, r: 6.2, class: "pt-ring", stroke: "currentColor", opacity: .55 }));
-        }
+      if (cur) svg.appendChild(sv("circle", { cx: x(i), cy: y(v), r: 6.8, class: "pt-ring", stroke: "currentColor", opacity: .55 }));
+      if (n <= 14) {
+        const dy = y(v) > top + 22 ? -11 : 22;
+        svg.appendChild(svText(clampX(x(i), 18), y(v) + dy, fmt(v), { "text-anchor": "middle", class: "pt-val", fill: "var(--mut)" }));
       }
-      /* x labels */
-      const showLbl = n <= 14 || i % 2 === (n - 1) % 2;
-      if (showLbl) {
-        const t = svText(0, 0, e.tag, { "font-size": 9.5, "text-anchor": "end", transform: `translate(${x(i) + 3},${axisB + 14}) rotate(-42)` });
-        if (i === n - 1) t.setAttribute("font-weight", "700");
+      if ((n - 1 - i) % step === 0) {
+        const t = svText(clampX(x(i), 26), H - 8, entryLabel(i), { "text-anchor": "middle", "font-family": "var(--mono)" });
+        if (cur) { t.setAttribute("font-weight", "700"); t.setAttribute("fill", "var(--ink)"); }
         svg.appendChild(t);
       }
     });
 
-    /* hover */
-    const guide = sv("line", { y1: p1t, y2: axisB, class: "guide" });
+    const guide = sv("line", { y1: top, y2: bot, class: "guide" });
     svg.appendChild(guide);
-    const zone = sv("rect", { x: ml - 10, y: p1t, width: W - ml - mr + 20, height: axisB - p1t, class: "hover-zone" });
+    const zone = sv("rect", { x: ml - 10, y: top, width: W - ml - mr + 20, height: bot - top, class: "hover-zone" });
     zone.addEventListener("mousemove", ev => {
       const bx = svg.getBoundingClientRect();
-      const px = ev.clientX - bx.left;
       let best = 0, bd = Infinity;
-      for (let i = 0; i < n; i++) { const d = Math.abs(px - x(i)); if (d < bd) { bd = d; best = i; } }
-      const e = releases[best], t = toks[best];
+      for (let i = 0; i < n; i++) { const d = Math.abs(ev.clientX - bx.left - x(i)); if (d < bd) { bd = d; best = i; } }
       guide.setAttribute("x1", x(best)); guide.setAttribute("x2", x(best));
       guide.style.opacity = 1;
-      const nOk = Math.round(e.pass_rate * e.runs);
-      showTip(
-        `<b>${esc(e.tag)}</b>${best === n - 1 ? " · current" : ""}${e.prerelease ? " · pre" : ""}<br>` +
-        `${fDate(e.created_at)} · ${e.runs} runs · ${esc(e.cases || "")}<br>` +
-        `pass <b class="ok">${fPct(e.pass_rate)}</b> (${nOk}/${e.runs}) · score <b>${e.mean_score.toFixed(3)}</b><br>` +
-        `tokens ${t.isP50 ? "p50" : "≈mean"} <b>${fTok(t.v)}</b> per correct run` +
-        (e.efficiency_vs
-          ? `<br>eff vs ${esc(e.efficiency_vs.ref_tag)} <b class="${e.efficiency_vs.score >= parityOf(e) ? "ok" : "bad"}">${e.efficiency_vs.score.toFixed(3)}</b> · parity ${parityOf(e).toFixed(3)}`
-          : ""),
-        ev.clientX, ev.clientY);
+      trendTip(best, ev);
     });
     zone.addEventListener("mouseleave", () => { guide.style.opacity = 0; hideTip(); });
     svg.appendChild(zone);
     host.appendChild(svg);
+  }
 
-    $("#trend-legend").innerHTML =
-      `<span><span class="sw" style="background:var(--ok)"></span>pass rate</span>` +
-      `<span><span class="sw" style="background:var(--blue)"></span>mean score</span>` +
-      `<span><span class="sw" style="background:var(--amber)"></span>tokens p50 (correct)</span>` +
-      (toks.some(t => !t.isP50) ? `<span><span class="sw dotc" style="border:1.5px solid var(--amber)"></span>mean fallback (older record)</span>` : "") +
-      (hasEff ? `<span><span class="sw dotc" style="background:var(--ok)"></span>efficiency vs prev (dashed tick = parity; chained, not a level)</span>` : "");
-    $("#trend-note").textContent = prev
+  function renderTimelines() {
+    lineChart($("#pass-chart"), {
+      val: i => releases[i].pass_rate,
+      fmt: fPct, yMax: 1,
+      yTicks: [[0, "0%"], [.5, "50%"], [1, "100%"]],
+      lineCls: "line-pass", ptCls: "pt-pass",
+    });
+    const agg = releases.map(aggOf);
+    const tokMax = Math.max(1, ...agg.map(t => t.v));
+    $("#tok-title").textContent = view.agg === "solve"
+      ? "Tokens per solve" : `Tokens per correct run (${view.agg})`;
+    lineChart($("#tok-chart"), {
+      val: i => agg[i].v > 0 ? agg[i].v : null,
+      fmt: fTok, yMax: tokMax * 1.15,
+      yTicks: [[0, "0"], [tokMax, fTok(tokMax)]],
+      lineCls: "line-tok", ptCls: "pt-tok",
+      hollow: i => agg[i].approx,
+    });
+  }
+
+  /* scatter: X = pass rate, Y = tokens spent (up = costlier) */
+  const KIND = e => e.kind === "ci"
+    ? (e.branch === record.branch ? "branch" : "baseline")
+    : "release";
+
+  /* 1-2-5 tick series covering [lo, hi] — consistent ticks on linear AND log */
+  function niceTicks(lo, hi) {
+    const out = [];
+    let mag = 10 ** Math.floor(Math.log10(Math.max(1, lo)));
+    for (; mag <= hi; mag *= 10) {
+      for (const m of [1, 2, 5]) {
+        const v = m * mag;
+        if (v >= lo && v <= hi) out.push(v);
+      }
+    }
+    return out;
+  }
+
+  function renderScatter() {
+    const host = $("#scatter-chart");
+    host.innerHTML = "";
+    const pts = releases.map((e, i) => ({ e, i, ...aggOf(e) })).filter(pt => pt.v > 0);
+    if (!pts.length) {
+      host.innerHTML = '<p class="note" style="padding:4px 4px 12px">no token data to place</p>';
+      return;
+    }
+    /* pass rate is discrete (n-of-5 smoke runs), so it gets lanes, and the
+       continuous axis goes to cost: an all-pass history reads as one clean
+       cost ladder; failures open lower lanes and regressions drop down */
+    const laneKeys = [...new Set(pts.map(pt => Math.round(pt.e.pass_rate * 1000)))]
+      .sort((a, b) => b - a);
+    const laneH = laneKeys.length === 1 ? 96 : 64;
+    const W = Math.max(340, host.parentElement.getBoundingClientRect().width - 16);
+    const ml = 64, mr = 56, top = 18;
+    const bot = top + laneKeys.length * laneH;
+    const H = bot + 44;
+    const svg = sv("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+    const laneMid = k => top + laneKeys.indexOf(k) * laneH + laneH / 2;
+
+    /* x = tokens */
+    const vals = pts.map(pt => pt.v);
+    const vMax = Math.max(...vals), vMin = Math.min(...vals);
+    let xOf, domLo, domHi;
+    if (view.scale === "log") {
+      domLo = vMin / 1.3; domHi = vMax * 1.3;
+      const l0 = Math.log10(domLo), l1 = Math.log10(domHi);
+      xOf = v => ml + (W - ml - mr) * (Math.log10(v) - l0) / (l1 - l0);
+    } else {
+      domLo = 0; domHi = vMax * 1.12;
+      xOf = v => ml + (W - ml - mr) * (v / domHi);
+    }
+    let ticks = niceTicks(Math.max(1, domLo), domHi);
+    if (ticks.length < 3 || ticks.length > 7) {
+      const span = domHi - domLo;
+      const rawStep = span / 5;
+      const mag = 10 ** Math.floor(Math.log10(rawStep));
+      const step = [1, 2, 5, 10].map(m => m * mag).find(v => v >= rawStep) || 10 * mag;
+      ticks = [];
+      for (let v = Math.ceil(domLo / step) * step; v <= domHi; v += step) ticks.push(v);
+    }
+    for (const v of ticks) {
+      const px = xOf(v);
+      if (px < ml - 1 || px > W - mr + 1) continue;
+      const g = sv("g", { class: "grid" });
+      g.appendChild(sv("line", { x1: px, x2: px, y1: top, y2: bot }));
+      svg.appendChild(g);
+      svg.appendChild(svText(px, bot + 18, fTok(v), { "text-anchor": "middle" }));
+    }
+    svg.appendChild(svText(W - mr, bot + 34, "tokens →", { "text-anchor": "end", "font-size": 11 }));
+
+    /* lanes: separators + pass-rate labels */
+    laneKeys.forEach((k, li) => {
+      if (li > 0) {
+        svg.appendChild(sv("line", {
+          x1: ml, x2: W - mr, y1: top + li * laneH, y2: top + li * laneH,
+          stroke: "var(--line2)",
+        }));
+      }
+      const ok = k === 1000;
+      svg.appendChild(svText(ml - 10, laneMid(k) + 4, (k / 10).toFixed(0) + "%", {
+        "text-anchor": "end", "font-weight": 600,
+        fill: ok ? "var(--ok)" : (k >= 500 ? "var(--amber)" : "var(--bad)"),
+      }));
+    });
+
+    const mark = (pt, px, py) => {
+      const kind = KIND(pt.e);
+      const cur = pt.i === releases.length - 1;
+      const color = cur ? "var(--accent)" : kind === "release" ? "var(--blue)" : kind === "baseline" ? "var(--mut)" : "var(--ok)";
+      const common = { fill: pt.approx ? "var(--panel)" : color, stroke: color, "stroke-width": 1.8, "data-i": pt.i, cursor: "pointer" };
+      if (kind === "release") return sv("rect", { x: px - 4.5, y: py - 4.5, width: 9, height: 9, ...common });
+      if (kind === "baseline") return sv("rect", { x: px - 5, y: py - 5, width: 10, height: 10, transform: `rotate(45 ${px} ${py})`, ...common });
+      return sv("circle", { cx: px, cy: py, r: 5, ...common });
+    };
+
+    /* within a lane, dots spread by cost; labels go above/below alternating
+       when neighbours crowd, anchors (current/release/baseline) win slots */
+    const placedLbl = [];
+    /* beeswarm-lite: dots sharing a lane displace vertically when they would
+       overlap, so dense cost clusters stay individually clickable */
+    const placedDot = [];
+    const dotY = (px, base) => {
+      for (const off of [0, -12, 12, -24, 24]) {
+        const py = base + off;
+        if (!placedDot.some(d => Math.abs(d.x - px) < 11 && Math.abs(d.y - py) < 11)) return py;
+      }
+      return base;
+    };
+    pts.forEach(pt => {
+      const px = xOf(pt.v);
+      const py = dotY(px, laneMid(Math.round(pt.e.pass_rate * 1000)));
+      placedDot.push({ x: px, y: py });
+      const cur = pt.i === releases.length - 1;
+      if (cur) svg.appendChild(sv("circle", { cx: px, cy: py, r: 9, class: "pt-ring", stroke: "var(--accent)", opacity: .6 }));
+      const m = mark(pt, px, py);
+      m.addEventListener("mousemove", ev => trendTip(pt.i, ev));
+      m.addEventListener("mouseleave", hideTip);
+      svg.appendChild(m);
+      const anchor = cur || KIND(pt.e) !== "branch";
+      /* candidate label slots around the dot, nearest first */
+      const slots = [py - 15, py + 23, py - 27, py + 35, py - 39, py + 47];
+      const fits = ly => !placedLbl.some(b => Math.abs(b.y - ly) < 12 && Math.abs(b.x - px) < 64)
+        && !placedDot.some(d => Math.abs(d.y - ly + 4) < 10 && Math.abs(d.x - px) < 28);
+      let ly = slots.find(fits);
+      if (ly == null) {
+        if (!anchor) return;
+        const i = placedLbl.findIndex(b => Math.abs(b.y - slots[0]) < 12 && Math.abs(b.x - px) < 64 && !b.anchor);
+        if (i >= 0) { placedLbl[i].el.remove(); placedLbl.splice(i, 1); ly = slots[0]; }
+        else return;
+      }
+      const el2 = svText(px, ly, entryLabel(pt.i), {
+        "text-anchor": "middle",
+        "font-family": "var(--mono)",
+        ...(cur ? { "font-weight": 700, fill: "var(--ink)" } : {}),
+      });
+      placedLbl.push({ x: px, y: ly, anchor, el: el2 });
+      svg.appendChild(el2);
+    });
+    host.appendChild(svg);
+
+    const anyApprox = pts.some(pt => pt.approx);
+    $("#scatter-legend").innerHTML =
+      `<span><span class="sw dotc" style="background:var(--ok)"></span>this branch (-1, -2 = commits back)</span>` +
+      (pts.some(pt => KIND(pt.e) === "baseline" && pt.i !== releases.length - 1) ? `<span><span class="sw dotc" style="background:var(--mut);border-radius:1px"></span>baseline branch</span>` : "") +
+      (pts.some(pt => KIND(pt.e) === "release") ? `<span><span class="sw dotc" style="background:var(--blue);border-radius:1px"></span>release</span>` : "") +
+      `<span><span class="sw dotc" style="border:1.5px solid var(--accent)"></span>ring = current</span>` +
+      (anyApprox ? `<span><span class="sw dotc" style="border:1.5px solid var(--ok)"></span>hollow = approximate (record predates ${AGG_LABEL[view.agg]})</span>` : "");
+  }
+
+  /* control wiring: both agg segments mirror each other; everything syncs to the URL */
+  function syncControls() {
+    document.querySelectorAll(".agg-seg button").forEach(b =>
+      b.classList.toggle("on", b.dataset.v === view.agg));
+    document.querySelectorAll("#sc-scale button").forEach(b =>
+      b.classList.toggle("on", b.dataset.v === view.scale));
+  }
+  document.querySelectorAll(".agg-seg button").forEach(b =>
+    b.addEventListener("click", () => {
+      view.agg = b.dataset.v;
+      syncURL([["agg", view.agg, VIEW_DEFAULTS.agg]]);
+      syncControls();
+      renderTimelines();
+      renderScatter();
+    }));
+  document.querySelectorAll("#sc-scale button").forEach(b =>
+    b.addEventListener("click", () => {
+      view.scale = b.dataset.v;
+      syncURL([["scale", view.scale, VIEW_DEFAULTS.scale]]);
+      syncControls();
+      renderScatter();
+    }));
+  syncControls();
+
+  function renderTrend() {
+    renderTimelines();
+    renderScatter();
+    $("#trend-note").textContent = (prev
       ? "Small headline moves are noise — per-question flips (section 4) are the signal."
-      : "First qualified release — no prior eval-qualification.json records to compare against.";
+      : (CI
+        ? "First recorded run for this branch — no master baseline, release record, or prior commits to compare against yet."
+        : "First qualified release — no prior eval-qualification.json records to compare against."))
+      + " Mean score and efficiency live in the table; hover any point for full detail.";
   }
 
   /* releases table */
   (() => {
+    const repoOf = e => e.repo || record.repo || "";
     const rows = [...releases].reverse().map((e, i) => {
       const cur = i === 0;
       const t = tokenLabel(e);
       const nOk = Math.round(e.pass_rate * e.runs);
+      const sha = (e.commit || "").slice(0, 9);
+      const shaCell = sha && repoOf(e)
+        ? `<a class="num" href="https://github.com/${esc(repoOf(e))}/commit/${esc(e.commit)}">${esc(sha)}</a>`
+        : `<span class="num" style="color:var(--mut)">${esc(sha || "—")}</span>`;
       return `<tr${cur ? ' class="current"' : ""}>` +
-        `<td class="qid">${esc(e.tag)}${cur ? " <span style='color:var(--ok)'>●</span>" : ""}${e.prerelease ? ' <span class="badge pre">pre</span>' : ""}</td>` +
+        `<td><span class="qid">${esc(e.tag)}</span>${cur ? " <span style='color:var(--ok)'>●</span>" : ""}${e.prerelease ? ' <span class="badge pre">pre</span>' : ""}` +
+        (e.commit_message ? `<div class="commit-msg" title="${esc(e.commit_message)}">${esc(e.commit_message)}</div>` : "") +
+        `</td>` +
         `<td class="num">${fDate(e.created_at)}</td>` +
         `<td class="r">${fPct(e.pass_rate)} <span style="color:var(--faint)">(${nOk}/${e.runs})</span></td>` +
-        `<td class="r">${e.mean_score.toFixed(3)}</td>` +
+        `<td class="r">${e.mean_score != null ? e.mean_score.toFixed(3) : '<span style="color:var(--faint)">—</span>'}</td>` +
         `<td class="r"${e.efficiency_vs ? ` title="vs ${esc(e.efficiency_vs.ref_tag)} · parity ${(0.25 * e.pass_rate).toFixed(3)}"` : ""}>` +
         `${e.efficiency_vs ? e.efficiency_vs.score.toFixed(3) : '<span style="color:var(--faint)">—</span>'}</td>` +
         `<td class="r">${t.isP50 ? "" : "≈"}${fTok(t.v)}</td>` +
         `<td class="r">${e.runs}</td>` +
-        `<td class="num" style="color:var(--mut)">${esc((e.commit || "").slice(0, 9))}</td>` +
+        `<td>${shaCell}</td>` +
         `<td class="num" style="color:var(--mut)">${esc(e.cases || "")}</td></tr>`;
     }).join("");
     $("#rel-table").innerHTML =
-      `<thead><tr><th>release</th><th>date</th><th class="r">pass rate</th><th class="r">mean score</th>` +
+      `<thead><tr><th>${UNIT}</th><th>date</th><th class="r">pass rate</th><th class="r">mean score</th>` +
       `<th class="r" title="${esc(EFF_EXPLAIN)} (each release vs its own predecessor)">eff vs prev</th>` +
       `<th class="r">tok p50</th><th class="r">runs</th><th>commit</th><th>cases</th></tr></thead>` +
       `<tbody>${rows}</tbody>`;
@@ -1022,7 +1422,7 @@
     const host = $("#swarm-chart");
     host.innerHTML = "";
     const W = Math.max(340, host.parentElement.getBoundingClientRect().width - 20);
-    const ml = 16, mr = 16, R = 5;
+    const ml = 16, mr = 36, R = 6;
     const tokMax = Math.max(1, ...runs.map(r => r.tokens || 0)) * 1.04;
     const x = v => ml + (W - ml - mr) * (v / tokMax);
 
@@ -1044,28 +1444,33 @@
       }
       placed.push(p);
     }
-    const ext = Math.max(20, ...placed.map(p => Math.abs(p.py) + R));
-    const axisY = ext * 2 + 26;
-    const H = axisY + 22;
-    const cy0 = ext + 8;
+    const ext = Math.max(40, ...placed.map(p => Math.abs(p.py) + R));
+    const axisY = ext * 2 + 62;
+    const H = axisY + 24;
+    const cy0 = ext + 44;
     const svg = sv("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
 
     /* axis + ticks */
     const ax = sv("g", { class: "axis-strong" });
     ax.appendChild(sv("line", { x1: ml, x2: W - mr, y1: axisY, y2: axisY }));
     svg.appendChild(ax);
+    const dataMax = Math.max(1, ...runs.map(r => r.tokens || 0));
     const step = tokMax > 60000 ? 20000 : 10000;
     for (let v = 0; v <= tokMax; v += step) {
+      if (x(dataMax) - x(v) < 52 && v !== 0) continue;
       svg.appendChild(sv("line", { x1: x(v), x2: x(v), y1: axisY, y2: axisY + 4, class: "axis-strong", stroke: "var(--line)" }));
-      svg.appendChild(svText(x(v), axisY + 15, fTok(v), { "text-anchor": "middle", "font-size": 9 }));
+      svg.appendChild(svText(x(v), axisY + 17, fTok(v), { "text-anchor": "middle" }));
     }
+    /* the true max is always on the scale */
+    svg.appendChild(sv("line", { x1: x(dataMax), x2: x(dataMax), y1: axisY, y2: axisY + 5, class: "axis-strong", stroke: "var(--line)" }));
+    svg.appendChild(svText(x(dataMax), axisY + 17, fTok(dataMax), { "text-anchor": "middle", "font-weight": 700, fill: "var(--ink)" }));
     /* percentile rules (correct runs, matches the record) */
     const tp = record.token_percentiles || {};
-    for (const [k, lift] of [["p50", 0], ["p90", 0], ["p99", 0]]) {
+    for (const [k, lift] of [["p50", 0], ["p90", 15], ["p99", 30]]) {
       if (!tp[k]) continue;
       const px = x(tp[k]);
       svg.appendChild(sv("line", { x1: px, x2: px, y1: 4 + lift, y2: axisY, class: "pct-rule" }));
-      svg.appendChild(svText(px + 4, 11 + lift, k + " " + fTok(tp[k]), { "font-size": 9 }));
+      svg.appendChild(svText(px + 5, 12 + lift, k + " " + fTok(tp[k]), { "font-size": 11 }));
     }
 
     for (const p of placed) {
@@ -1090,30 +1495,47 @@
     $("#swarm-legend").innerHTML =
       `<span><span class="sw dotc" style="background:var(--ok)"></span>correct (${nOk})</span>` +
       `<span><span class="sw dotc" style="background:var(--bad)"></span>failed (${runs.length - nOk})</span>` +
-      `<span style="color:var(--faint)">percentile rules computed over correct runs</span>`;
+      `<span>percentile rules computed over correct runs</span>`;
   }
 
-  /* ── categories ───────────────────────────────────────────────────────── */
+  /* ── categories: token box plots, color = pass rate ──────────────────── */
   function renderCats() {
     const host = $("#cat-chart");
     host.innerHTML = "";
     if (!cats.length) { host.innerHTML = '<p class="note">no tag metadata for this cases file</p>'; return; }
     const W = Math.max(340, host.parentElement.getBoundingClientRect().width - 20);
-    const rowH = 27, lblW = Math.min(180, W * .25), valW = 250;
-    const barX = lblW + 12, barW = Math.max(60, W - barX - valW);
-    const H = cats.length * rowH + 6;
+    const rowH = 36, lblW = Math.min(200, W * .25), valW = 290;
+    const barX = lblW + 14, barW = Math.max(80, W - barX - valW);
+    const axisH = 30;
+    const H = cats.length * rowH + 8 + axisH;
     const svg = sv("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+    const maxTok = Math.max(1, ...runs.filter(r => r.correct).map(r => r.tokens || 0));
+    const x = v => barX + barW * (v / (maxTok * 1.06));
+    /* pass rate as a 3-stop color ramp: green ≥ all pass, through amber, to red */
+    const colorOf = rate => rate >= .999 ? "var(--ok)" :
+      rate >= .5 ? `color-mix(in srgb, var(--ok) ${Math.round((rate - .5) * 160)}%, var(--amber))`
+                 : `color-mix(in srgb, var(--amber) ${Math.round(rate * 160)}%, var(--bad))`;
+
     cats.forEach((c, i) => {
-      const y = i * rowH + 4;
+      const yTop = i * rowH + 4, mid = yTop + 14;
       const g = sv("g", { class: "cat-row", "data-tag": c.tag });
-      const lbl = svText(lblW, y + 13, c.tag, { "text-anchor": "end", class: "lbl", "font-size": 11 });
-      g.appendChild(lbl);
-      g.appendChild(sv("rect", { x: barX, y: y + 3, width: barW, height: 13, class: "cat-track", rx: 1 }));
-      const cls = c.rate >= .999 ? "hi" : (c.rate >= .5 ? "mid" : "lo");
-      g.appendChild(sv("rect", { x: barX, y: y + 3, width: Math.max(2, barW * c.rate), height: 13, class: `cat-fill ${cls}`, rx: 1 }));
-      g.appendChild(svText(barX + barW + 10, y + 13,
-        `${c.correct}/${c.runs} · ${fPct(c.rate)} · ${c.qids.size}q · med ${fTok(c.medTok)} tok`,
-        { "font-size": 10 }));
+      g.appendChild(svText(lblW, mid + 4, c.tag, { "text-anchor": "end", class: "lbl", "font-size": 12 }));
+      g.appendChild(sv("rect", { x: barX, y: yTop, width: barW, height: rowH - 8, fill: "transparent" }));
+      const col = colorOf(c.rate);
+      const vals = [...c.toks].sort((a, b) => a - b);
+      if (!vals.length) {
+        g.appendChild(svText(barX + 2, mid + 4, "no correct runs", { fill: "var(--bad)", "font-size": 11 }));
+      } else if (vals.length < 4) {
+        for (const v of vals) g.appendChild(sv("circle", { cx: x(v), cy: mid, r: 5.5, fill: col, "fill-opacity": .85 }));
+      } else {
+        const q1 = pctl(vals, .25), q3 = pctl(vals, .75), med = median(vals);
+        g.appendChild(sv("line", { x1: x(vals[0]), x2: x(vals[vals.length - 1]), y1: mid, y2: mid, stroke: col, "stroke-width": 1.6, opacity: .7 }));
+        g.appendChild(sv("rect", { x: x(q1), y: mid - 8, width: Math.max(3, x(q3) - x(q1)), height: 16, fill: col, "fill-opacity": .8, rx: 2 }));
+        g.appendChild(sv("line", { x1: x(med), x2: x(med), y1: mid - 9, y2: mid + 9, stroke: "var(--ink)", "stroke-width": 2 }));
+      }
+      g.appendChild(svText(barX + barW + 12, mid + 4,
+        `${c.correct}/${c.runs} · ${fPct(c.rate)} · ${c.qids.size}q` + (c.medTok > 0 ? ` · med ${fTok(c.medTok)} tok` : ""),
+        { "font-size": 11.5 }));
       g.addEventListener("click", () => {
         const on = state.tags.has(c.tag);
         state.tags.clear();
@@ -1123,11 +1545,23 @@
       });
       g.addEventListener("mousemove", ev => showTip(
         `<b>${esc(c.tag)}</b><br>${c.correct}/${c.runs} runs pass (${fPct(c.rate)}) across ${c.qids.size} question${c.qids.size > 1 ? "s" : ""}<br>` +
-        `median ${fTok(c.medTok)} tok per correct run · click to filter`,
+        (c.toks.length ? `tokens per correct run: median ${fTok(c.medTok)}` : "no correct runs") +
+        `<br><span style="color:var(--faint)">click to filter the run explorer</span>`,
         ev.clientX, ev.clientY));
       g.addEventListener("mouseleave", hideTip);
       svg.appendChild(g);
     });
+
+    /* shared token axis */
+    const axisY = cats.length * rowH + 10;
+    svg.appendChild(sv("line", { x1: barX, x2: barX + barW, y1: axisY, y2: axisY, class: "axis-strong", stroke: "var(--line)" }));
+    for (const v of [0, maxTok / 2, maxTok]) {
+      svg.appendChild(sv("line", { x1: x(v), x2: x(v), y1: axisY, y2: axisY + 5, stroke: "var(--line)" }));
+      svg.appendChild(svText(x(v), axisY + 18, fTok(v), {
+        "text-anchor": "middle",
+        ...(v === maxTok ? { "font-weight": 700, fill: "var(--ink)" } : {}),
+      }));
+    }
     host.appendChild(svg);
     syncCatActive();
   }
@@ -1136,46 +1570,45 @@
       g.classList.toggle("active", state.tags.has(g.dataset.tag)));
   }
 
-  /* ── question matrix ──────────────────────────────────────────────────── */
+  /* ── question matrix: each question across the comparison history ────── */
   function renderMatrix() {
-    const prevQ = (prev && prev.questions) || {};
+    const histIdx = releases.slice(0, -1).map((_, i) => i).slice(-7);
+    const histCell = (entry, qid) => {
+      const q = (entry.questions || {})[qid];
+      if (!q || !q.runs) return `<td class="mxh none">·</td>`;
+      const frac = q.correct / q.runs;
+      const cls = frac >= .999 ? "ok" : (frac <= 0 ? "bad" : "mid");
+      const txt = q.runs > 1 ? `${q.correct}/${q.runs}` : (q.correct ? "✓" : "✕");
+      return `<td class="mxh ${cls}" title="${esc(entry.tag)}: ${q.correct}/${q.runs}">${txt}</td>`;
+    };
     const rows = questionIds.map(qid => {
       const rs = byQ.get(qid);
       const nOk = rs.filter(r => r.correct).length;
       const cells = rs.map((r, j) =>
         `<button class="mx-cell ${r.correct ? "ok" : "bad"}" data-i="${r._i}" ` +
         `aria-label="run ${j + 1} ${runStatus(r)}">${r.correct ? "✓" : "✕"}</button>`).join("");
-      let verdict;
-      const p = prevQ[qid];
-      if (!prev) verdict = `<span class="verdict na">—</span>`;
-      else if (!p) verdict = `<span class="verdict new">NEW</span>`;
-      else {
-        const pf = p.runs ? p.correct / p.runs : 0, cf = nOk / rs.length;
-        if (cf > pf) verdict = `<span class="verdict up" title="was ${p.correct}/${p.runs}">▲ ${p.correct}/${p.runs} → ${nOk}/${rs.length}</span>`;
-        else if (cf < pf) verdict = `<span class="verdict down" title="was ${p.correct}/${p.runs}">▼ ${p.correct}/${p.runs} → ${nOk}/${rs.length}</span>`;
-        else verdict = `<span class="verdict flat">·</span>`;
-      }
-      const tagsHtml = byQ.get(qid)[0].tags.map(t => esc(t)).join(" · ");
+      const tagsHtml = rs[0].tags.map(t => esc(t)).join(" · ");
       const ref = prevRefs.get(qid);
       let effCell = `<td class="r" style="color:var(--faint)">—</td>`;
       if (ref != null) {
         const qEff = rs.reduce((a, r) => a + runEff(r), 0) / rs.length;
         const par = 0.25 * (nOk / rs.length);
         effCell = `<td class="r" style="color:${qEff < par ? "var(--amber)" : "var(--mut)"}" ` +
-          `title="mean over runs vs ref ${fInt(ref)} tok (${esc(prev.tag)})${qEff < par ? " · below parity: heavier than the previous release" : ""}">${qEff.toFixed(3)}</td>`;
+          `title="mean over runs vs ref ${fInt(ref)} tok (${esc(prev.tag)})${qEff < par ? " · below parity: heavier than the reference" : ""}">${qEff.toFixed(3)}</td>`;
       }
       return `<tr><td><button class="qid" data-q="${esc(qid)}" title="filter run explorer to this question">${esc(qid)}</button>` +
-        `<div style="font:10px var(--mono);color:var(--faint);margin-top:2px">${tagsHtml}</div></td>` +
+        `<div style="font:11px var(--mono);color:var(--mut);margin-top:3px">${tagsHtml}</div></td>` +
+        histIdx.map(i => histCell(releases[i], qid)).join("") +
         `<td class="r" style="color:${nOk === rs.length ? "var(--ok)" : "var(--bad)"}">${nOk}/${rs.length}</td>` +
         effCell +
-        `<td><div class="mx-cells">${cells}</div></td>` +
-        `<td>${verdict}</td></tr>`;
+        `<td><div class="mx-cells">${cells}</div></td></tr>`;
     }).join("");
     $("#mx-table").innerHTML =
-      `<thead><tr><th>question</th><th class="r">pass</th>` +
+      `<thead><tr><th>question</th>` +
+      histIdx.map(i => `<th class="mxh-lbl" title="${esc(releases[i].tag)}">${esc(entryLabel(i))}</th>`).join("") +
+      `<th class="r">pass</th>` +
       `<th class="r" title="${esc(EFF_EXPLAIN)}">eff</th>` +
-      `<th>runs · canonical + variations</th>` +
-      `<th>Δ vs ${prev ? esc(prev.tag) : "—"}</th></tr></thead><tbody>${rows}</tbody>`;
+      `<th>this run</th></tr></thead><tbody>${rows}</tbody>`;
 
     $("#mx-table").querySelectorAll(".mx-cell").forEach(b => {
       const r = runs[+b.dataset.i];
@@ -1200,7 +1633,23 @@
   }
 
   /* ── run explorer ─────────────────────────────────────────────────────── */
-  const state = { q: "", status: "all", tags: new Set(), search: "" };
+  const state = (() => {
+    const sp = new URLSearchParams(location.search);
+    return {
+      q: sp.get("q") || "",
+      status: ["pass", "fail"].includes(sp.get("status")) ? sp.get("status") : "all",
+      tags: new Set((sp.get("tags") || "").split(",").filter(Boolean)),
+      search: sp.get("search") || "",
+    };
+  })();
+  function syncExplorerURL() {
+    syncURL([
+      ["q", state.q, ""],
+      ["status", state.status, "all"],
+      ["tags", [...state.tags].join(","), ""],
+      ["search", state.search, ""],
+    ]);
+  }
   const sort = { key: "id", dir: 1 };
   const SORTKEY = {
     id: r => r.id,
@@ -1256,7 +1705,7 @@
       `<th class="sortable${arrow("id")}" data-key="id">question</th>` +
       `<th class="sortable${arrow("subject")}" data-key="subject">subject</th>` +
       `<th class="sortable${arrow("status")}" data-key="status">status</th>` +
-      `<th class="sortable r${arrow("score")}" data-key="score">score</th>` +
+      `<th class="sortable r${arrow("score")}" data-key="score" title="correctness-gated token efficiency: a correct run at reference cost ≈ 0.25, leaner is higher, wrong = 0">score</th>` +
       `<th class="sortable r${arrow("tokens")}" data-key="tokens">tokens</th>` +
       `<th class="sortable r${arrow("eff")}" data-key="eff" title="${esc(EFF_EXPLAIN)}">eff</th>` +
       `<th class="sortable r${arrow("tools")}" data-key="tools">tools</th>` +
@@ -1311,6 +1760,7 @@
   }
 
   function renderExplorer() {
+    syncExplorerURL();
     renderFilters();
     const rows = filteredRuns().sort((a, b) => {
       const ka = SORTKEY[sort.key](a), kb = SORTKEY[sort.key](b);
@@ -1322,6 +1772,7 @@
     syncCatActive();
   }
 
+  $("#f-search").value = state.search;
   $("#f-search").addEventListener("input", ev => { state.search = ev.target.value; renderExplorer(); });
   $("#f-question").addEventListener("change", ev => { state.q = ev.target.value; renderExplorer(); });
   $("#f-status").querySelectorAll("button").forEach(b =>
@@ -1363,6 +1814,26 @@
   }
 
   const drawer = $("#drawer");
+  /* compact tool-call log: name + the head of its arguments. Older payloads
+     predate per-run tool capture and simply have no section. */
+  function toolCallsHtml(r) {
+    const calls = r.tool_calls || [];
+    if (!calls.length) {
+      return (r.tools ?? 0) > 0
+        ? `<div class="canon-note" style="color:var(--faint)">tool-call log not captured in this payload (run predates capture)</div>`
+        : "";
+    }
+    const nErr = calls.filter(t => t.error).length;
+    const more = (r.tools ?? calls.length) - calls.length;
+    const rows = calls.map(t =>
+      `<div class="tc${t.error ? " is-err" : ""}"><span class="tc-name">${esc(t.name)}</span>` +
+      `<span class="tc-args">${esc((t.args || "").slice(0, 90))}${(t.args || "").length > 90 ? "…" : ""}</span></div>`).join("");
+    return `<details class="toolcalls"><summary>${calls.length} tool call${calls.length === 1 ? "" : "s"}` +
+      (nErr ? ` · <span style="color:var(--bad)">${nErr} error${nErr === 1 ? "" : "s"}</span>` : "") +
+      (more > 0 ? ` · first ${calls.length} of ${r.tools}` : "") +
+      `</summary>${rows}</details>`;
+  }
+
   function openDrawer(r) {
     const st = runStatus(r);
     const eff = runEff(r);
@@ -1378,6 +1849,7 @@
       `<div class="drawer-label">question${r.question_canonical ? ' <span class="canon" title="' + CANON_TIP + '">°</span>' : ""}</div>` +
       `<div class="qblock">${esc(r.question || "(question text not recorded)")}</div>` +
       (r.question_canonical ? `<div class="canon-note">° ${CANON_TIP}</div>` : "") +
+      toolCallsHtml(r) +
       `<div class="drawer-label">final answer</div>` +
       (r.answer
         ? `<div class="answer">${esc(r.answer)}</div>`
@@ -1412,10 +1884,14 @@
   document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeDrawer(); });
 
   /* ── footer ───────────────────────────────────────────────────────────── */
-  $("#foot").innerHTML =
-    `Qualification of <b>${esc(record.tag)}</b> — small headline-score moves are noise; ` +
-    `per-question flips are the signal. History comes from prior releases' ` +
-    `<code>eval-qualification.json</code> assets. This page is fully self-contained: no external fetches.`;
+  $("#foot").innerHTML = CI
+    ? `Single-pass smoke run of <b>${esc(record.tag)}</b> — small headline-score moves are noise; ` +
+      `per-question flips are the signal. History comes from this branch's published smoke runs, ` +
+      `the master baseline, and the most recent release's qualification record (restricted to the ` +
+      `questions this run asked).`
+    : `Qualification of <b>${esc(record.tag)}</b> — small headline-score moves are noise; ` +
+      `per-question flips are the signal. History comes from prior releases' ` +
+      `<code>eval-qualification.json</code> assets. This page is fully self-contained: no external fetches.`;
 
   /* ── theme toggle ─────────────────────────────────────────────────────── */
   (() => {
