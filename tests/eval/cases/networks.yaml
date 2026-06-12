@@ -84,6 +84,36 @@
         from the last few hours. Which services or hosts are the loudest?
 
 
+  - id: cbt_table_bounds
+    description: >-
+      data range of mainnet fct_block, sourced from pipeline coverage without
+      being told to check it
+    input: "How far back does the fct_block table go on mainnet, and how current
+      is it?"
+    network: mainnet
+    tags: [cbt, mainnet, pipeline, coverage]
+    assert:
+      - type: llm-rubric
+        value: >
+          The question never mentions CBT: the agent should recognize that
+          fct_block is a pipeline-built aggregated table and source the answer
+          from the pipeline's coverage/bounds metadata (the cbt module),
+          translating the unix-second range into human dates — coverage starts
+          at mainnet genesis (2020-12-01) and extends to roughly the present.
+          Coverage-derived ranges pass; full-table MIN/MAX scans (even with
+          correct dates), invented dates, or no real query fail.
+    variations:
+      - "Before I write queries against mainnet's fct_block: what date range
+        does it actually have data for?"
+      - What's the earliest and latest data in the fct_block table on mainnet?
+      - Does the fct_block table on mainnet cover all of history, or are
+        there gaps?
+      - I queried fct_block on mainnet for a recent date and got nothing back
+        — is the table behind, or did I do something wrong?
+      - How fresh is mainnet's fct_block table, and how far back does it
+        reach?
+
+
   - id: forky_node_coverage                               # 💬 fork-choice capture ask
     description: live forky fork-choice snapshot coverage on sepolia
     input: "Which beacon nodes does Forky have fork-choice snapshots for on sepolia
