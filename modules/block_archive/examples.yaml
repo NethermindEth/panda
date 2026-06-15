@@ -21,7 +21,7 @@ block_archive_fetch:
         print(f"active polling: {len(active)}, archived-only: {len(inactive)}")
 
     - name: Download SSZ for a block
-      description: Fetch the SSZ-encoded SignedBeaconBlock as raw bytes
+      description: Fetch the SSZ-encoded SignedBeaconBlock bytes for clients that need the canonical binary payload
       query: |
         from ethpandaops import block_archive
 
@@ -31,10 +31,7 @@ block_archive_fetch:
 
         raw = block_archive.download_ssz(network, slot, block_root)
         print(f"{len(raw)} bytes (SSZ)")
-
-        # Save to disk for offline processing.
-        with open("/tmp/block.ssz", "wb") as f:
-            f.write(raw)
+        print(raw[:8].hex())
 
     - name: Get decoded JSON for a block
       description: Server-side decode of the SSZ into the canonical JSON SignedBeaconBlock (mainnet/sepolia/hoodi only; devnets need download_ssz + local decode)
@@ -65,7 +62,7 @@ block_archive_fetch:
               f"{block['block']['message']['proposer_index']}")
 
     - name: Browser link to a block
-      description: Build a link to the block archive UI for a (network, slot, root)
+      description: Build a link to the block archive UI page
       query: |
         from ethpandaops import block_archive
 

@@ -49,7 +49,10 @@ var blockArchiveDownloadOut string
 var blockArchiveDownloadCmd = &cobra.Command{
 	Use:   "download <network> <slot> <block-root>",
 	Short: "Download the SSZ bytes for a block",
-	Args:  cobra.ExactArgs(3),
+	Long: `Download the SSZ bytes for a block.
+
+Use --out to write the bytes to a local file; otherwise bytes are written to stdout.`,
+	Args: cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		response, err := runServerOperationRaw(cmd, "block_archive.download_ssz", map[string]any{
 			"network":    args[0],
@@ -122,7 +125,7 @@ var blockArchiveLinkCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(blockArchiveCmd)
 
-	blockArchiveDownloadCmd.Flags().StringVarP(&blockArchiveDownloadOut, "out", "o", "",
+	blockArchiveDownloadCmd.Flags().StringVar(&blockArchiveDownloadOut, "out", "",
 		"Output file (default: stdout)")
 	blockArchiveNetworksCmd.Flags().BoolVar(&blockArchiveNetworksAll, "all", false,
 		"Include inactive networks the archive has historical blocks for")
